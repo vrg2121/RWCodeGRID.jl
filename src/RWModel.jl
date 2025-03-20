@@ -1,9 +1,61 @@
 module RWModel
-export greet
+export greet, run_model
 
 greet() = print("RWModel is working!")
 
-function run_rwcode(config::ModelConfig, D::String, G::String, R::String, P::NamedTuple)
+# ---------------------------------------------------------------------------- #
+#                         Import all Relevant Functions                        #
+# ---------------------------------------------------------------------------- #
+
+# Load Data
+include("./functions/DataAdjustments.jl")
+include("./functions/DataLoadsFunc.jl")
+include("./DataLoads.jl")
+import .DataLoads: load_data
+
+# Initial Equilibrium
+include("./functions/MarketEquilibrium.jl")
+include("./RegionModel.jl")
+include("./functions/MarketFunctions.jl")
+include("./Market.jl")
+import .Market: solve_market
+
+# Long Run Equilibrium
+include("./functions/SteadyStateFunctions.jl")
+include("./SteadyState.jl")
+import .SteadyState: solve_steadystate
+
+# Run Transitional Dynamics
+include("./functions/TransitionFunctions.jl")
+include("./Transition.jl")
+import .Transition: solve_transition
+
+# Write Data
+include("./WriteData.jl")
+
+import .WriteData: writedata
+
+# Write Data with Battery configurations
+include("./WriteDataBattery.jl")
+import .WriteDataBattery: writedata_battery
+
+# -------------------- Run Exogenous Technology Equilibria ------------------- #
+
+# Long Run Equilibrium with Exogenous Tech
+include("./functions/SteadyStateExogFunc.jl")
+include("./SteadyStateExog.jl")
+import .SteadyStateExog: solve_steadystate_exog
+
+# Transitional Dynamics with Exogenous Tech
+include("./functions/TransitionExogFunc.jl")
+include("./TransitionExog.jl")
+import .TransitionExog: solve_transition_exog
+
+# Data Outputs with Exogenous Tech
+include("./WriteDataExog.jl")
+import .WriteDataExog: writedata_exog
+
+function run_model(config::ModelConfig, D::String, G::String, R::String, P::NamedTuple)
 
     # ---------------------------------------------------------------------------- #
     #                                  Data Loads                                  #
