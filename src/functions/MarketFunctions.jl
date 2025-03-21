@@ -6,7 +6,6 @@ using ..RegionModel, ..MarketEquilibrium
 using JuMP, Ipopt
 
 import ..DataLoadsFunc: StructRWParams
-import ..ParamsFunctions: StructParams
 
 function calc_subsidyUS(p_E_init::Vector, regions::DataFrame, majorregions::DataFrame)
     p_E_weighted = Vector{Float64}(undef, 2531)
@@ -23,7 +22,7 @@ end
 
 function calc_expenditure!(e2_init::Matrix, fusage_ind_init::Vector, 
     fusage_power_init::Vector, Expenditure_init::Vector,
-    fossilsales::Matrix, laboralloc::Matrix, D_init::Vector, params::StructParams, p_E_init::Vector, p_F::Float64, 
+    fossilsales::Matrix, laboralloc::Matrix, D_init::Vector, params, p_E_init::Vector, p_F::Float64, 
     YF_init::Vector, regionParams::StructRWParams, wage_init::Vector, rP_init::Vector, KP_init::Vector, YE_init::Vector,
     regions::DataFrame, PI_init::Vector)
     # compute electricty and fossil fuel usage in industry and electricity
@@ -44,7 +43,7 @@ function calc_expenditure!(e2_init::Matrix, fusage_ind_init::Vector,
     #fossshare_j = fossilsales ./ Expenditure_init
 end
 
-function elec_fuel_expenditure!(laboralloc::Matrix, D_init::Vector, params::StructParams, p_E_init::Vector, p_F::Float64, 
+function elec_fuel_expenditure!(laboralloc::Matrix, D_init::Vector, params, p_E_init::Vector, p_F::Float64, 
     YF_init::Vector, regionParams::StructRWParams, wage_init::Vector, rP_init::Vector, KP_init::Vector, fossilsales::Matrix, 
     YE_init::Vector, regions::DataFrame, PI_init::Vector)
     e2_init = Matrix{Float64}(undef, 2531, 10)
@@ -161,7 +160,7 @@ end
 
 
 function market_setup!(rP_init::Vector, pg_init_s::Matrix, pE_market_init::Vector, 
-    wage_init::Vector, params::StructParams, p_E_init::Vector, p_F::Float64, R_LR::Float64, PC_guess_init::Matrix)
+    wage_init::Vector, params, p_E_init::Vector, p_F::Float64, R_LR::Float64, PC_guess_init::Matrix)
     
     # Set initial capital returns
     rP_init .= (R_LR - 1 + params.deltaP) .* PC_guess_init
@@ -180,7 +179,7 @@ function market_setup!(rP_init::Vector, pg_init_s::Matrix, pE_market_init::Vecto
 end
 
 function optimize_region!(result_price_init::Vector, result_Dout_init::Matrix{Matrix{Float64}}, result_Yout_init::Matrix{Matrix{Float64}}, Lossfac_init::Matrix,
-	majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params::StructParams,
+	majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params,
 	wage_init::Vector, rP_init::Vector, linconscount::Int, pg_init_s::Matrix, pE_market_init::Vector, kappa::Int,
 	p_F::Float64, regionParams::StructRWParams, KR_init_S::Matrix, KR_init_W::Matrix)
 
@@ -263,7 +262,7 @@ function optimize_region!(result_price_init::Vector, result_Dout_init::Matrix{Ma
 end
 
 function optimize_region_test!(result_price_init::Vector, result_Dout_init::Matrix{Matrix{Float64}}, result_Yout_init::Matrix{Matrix{Float64}}, Lossfac_init::Matrix,
-	majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params::StructParams,
+	majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params,
 	wage_init::Vector, rP_init::Vector, linconscount::Int, pg_init_s::Matrix, pE_market_init::Vector, kappa::Int,
 	p_F::Float64, regionParams::StructRWParams, KR_init_S::Matrix, KR_init_W::Matrix, power2::Float64)
 
@@ -289,7 +288,7 @@ function optimize_region_test!(result_price_init::Vector, result_Dout_init::Matr
 end
 
 
-function second_loop(kk::Int, majorregions::DataFrame, laboralloc::Matrix, Lsector::Matrix, params::StructParams, 
+function second_loop(kk::Int, majorregions::DataFrame, laboralloc::Matrix, Lsector::Matrix, params, 
             wage_init::Vector, rP_init::Vector, result_Pout_init::Matrix, 
             pg_init_s::Matrix, pE_market_init::Vector, kappa::Int, 
             regionParams::StructRWParams, KR_init_S::Matrix, KR_init_W::Matrix, p_F::Float64)
@@ -350,7 +349,7 @@ function second_loop(kk::Int, majorregions::DataFrame, laboralloc::Matrix, Lsect
 
 end
 
-function solve_KP_init!(KP_init::Vector, Lsector::Matrix, params::StructParams, wage_init::Vector, rP_init::Vector)
+function solve_KP_init!(KP_init::Vector, Lsector::Matrix, params, wage_init::Vector, rP_init::Vector)
     # get capital vec
     Ksector = Lsector .* 
             (params.Vs[:, 4]' .* ones(params.J, 1)) ./
@@ -360,7 +359,7 @@ function solve_KP_init!(KP_init::Vector, Lsector::Matrix, params::StructParams, 
     return KP_init
 end
 
-function solve_initial_equilibrium(params::StructParams, wage_init::Union{Matrix, Vector{Float64}}, majorregions::DataFrame,
+function solve_initial_equilibrium(params, wage_init::Union{Matrix, Vector{Float64}}, majorregions::DataFrame,
     regionParams::StructRWParams, KR_init_S::Matrix{Float64}, KR_init_W::Matrix{Float64}, R_LR::Float64, sectoralempshares::Matrix{Union{Float64, Missing}},
     Linecounts::DataFrame, kappa::Int, regions::DataFrame, linconscount::Int, updw_w::Float64, upw_z::Float64, RWParams::StructRWParams, G::String)
     

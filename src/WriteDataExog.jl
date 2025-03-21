@@ -37,7 +37,7 @@ function writedata_exog(TE::NamedTuple, exogindex::Int, R::String)
         100 .* TE.renewshare_path_world[:, 1:30]'
     )
 
-    writedlm("$R/Renewable_share$(labeller).csv", sharepath, ",")
+    writedlm("$R/Renewable_share/Renewable_share$(labeller).csv", sharepath, ",")
 
     
 end

@@ -7,6 +7,10 @@ greet() = print("RWModel is working!")
 #                         Import all Relevant Functions                        #
 # ---------------------------------------------------------------------------- #
 
+# load struct for model configurations
+include("./ModelConfiguration.jl")
+import .ModelConfiguration: ModelConfig
+
 # Load Data
 include("./functions/DataAdjustments.jl")
 include("./functions/DataLoadsFunc.jl")

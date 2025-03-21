@@ -4,7 +4,6 @@ import DataFrames: DataFrame
 import MAT: matopen
 import Statistics: mean
 import ..DataLoadsFunc: StructGsupply, StructRWParams
-import ..ParamsFunctions: StructParams
 using JuMP, Ipopt
 using ..RegionModel, ..MarketEquilibrium
 
@@ -195,7 +194,7 @@ function new_grad_f(g, x...)
     return
 end
 
-function set_battery(KR_LR::Matrix, hoursofstorage::Int64, params::StructParams, Initialprod::Int64, T::Int64)
+function set_battery(KR_LR::Matrix, hoursofstorage::Int64, params, Initialprod::Int64, T::Int64)
     B_LR = KR_LR .* hoursofstorage
     Depreciation_B = B_LR .* params.deltaB
     cumsum = sum(Depreciation_B)
@@ -205,7 +204,7 @@ function set_battery(KR_LR::Matrix, hoursofstorage::Int64, params::StructParams,
     return p_B
 end
 
-function update_battery(KR_LR::Matrix, hoursofstorage::Int64, params::StructParams)
+function update_battery(KR_LR::Matrix, hoursofstorage::Int64, params)
     B_LR = KR_LR .* hoursofstorage
     Depreciation_B = B_LR .* params.deltaB
     cumsum = sum(Depreciation_B)
@@ -215,7 +214,7 @@ function update_battery(KR_LR::Matrix, hoursofstorage::Int64, params::StructPara
     return p_B
 end
 
-function solve_power_output(RWParams::StructRWParams, params::StructParams, RunBatteries::Int, RunCurtailment::Int,
+function solve_power_output(RWParams::StructRWParams, params, RunBatteries::Int, RunCurtailment::Int,
     Initialprod::Int, R_LR::Float64, majorregions::DataFrame, Linecounts::DataFrame, linconscount::Int,
     regionParams::StructRWParams, curtailmentswitch::Int, interp3, T::Int, kappa::Int, mrkteq::NamedTuple, config::ModelConfig, 
     pB_shifter::Float64, G::String)

@@ -8,7 +8,6 @@ import Random: Random
 import LinearAlgebra: I
 #import SparseArrays: sparse
 import ..DataLoadsFunc: StructRWParams
-import ..ParamsFunctions: StructParams
 
 using ..MarketEquilibrium
 
@@ -169,7 +168,7 @@ function add_model_variable(model::Model, LB::Vector, l_guess::Int, UB::Vector, 
     return @variable(model, LB[i] <= x[i=1:l_guess] <= UB[i], start=guess[i])
 end
 
-function add_model_constraint(model::Model, regionParams, params::StructParams, kk::Int, mid::Int)
+function add_model_constraint(model::Model, regionParams, params, kk::Int, mid::Int)
     x = model[:x]
     Pvec = @expression(model, x[mid+1:end] .- x[1:mid])
     sPvec = @expression(model, sum(Pvec))
@@ -180,13 +179,13 @@ function add_model_constraint(model::Model, regionParams, params::StructParams, 
 
 end
 
-function add_model_objective(model::Model, power::Matrix, shifter::Matrix, KFshifter::Union{Vector, SubArray}, KRshifter::Vector, p_F::Union{Float64, Vector, Int}, params::StructParams)
+function add_model_objective(model::Model, power::Matrix, shifter::Matrix, KFshifter::Union{Vector, SubArray}, KRshifter::Vector, p_F::Union{Float64, Vector, Int}, params)
     x = model[:x]
     @objective(model, Min, obj(x, power, shifter, KFshifter, KRshifter, p_F, params))
 end
 
 function add_model_objective_test(model::Model, power::Matrix, shifter::Matrix, KFshifter::Union{Vector, SubArray}, 
-            KRshifter::Vector, p_F::Union{Float64, Vector, Int}, params::StructParams, mid::Int, power2::Float64)
+            KRshifter::Vector, p_F::Union{Float64, Vector, Int}, params, mid::Int, power2::Float64)
     local x = model[:x]
     local Dsec = @expression(model, x[1:mid] .* ones(1, params.I))
     local Yvec = @expression(model, x[1+mid:end])
@@ -200,7 +199,7 @@ function add_model_objective_test(model::Model, power::Matrix, shifter::Matrix, 
     
 end
 
-function solve_model(kk::Int, l_guess::Int, LB::Vector, UB::Vector, guess::Union{Vector, Matrix}, regionParams::StructRWParams, params::StructParams, power::Matrix, 
+function solve_model(kk::Int, l_guess::Int, LB::Vector, UB::Vector, guess::Union{Vector, Matrix}, regionParams::StructRWParams, params, power::Matrix, 
     shifter::Matrix, KFshifter::Union{SubArray, Vector}, KRshifter::Vector, p_F::Union{Float64, Vector, Int}, mid::Int)
     println("solving the model for region $kk")
     model = Model(Ipopt.Optimizer)

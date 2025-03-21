@@ -50,7 +50,7 @@ function writedata_battery(P::NamedTuple, M::NamedTuple, S::NamedTuple, T::Named
     G = Matrix{Float64}(undef, 2531, 501)
     sharepath = Matrix{Float64}(undef, 30, 16)
 
-    labeller = "hours$(lpad(hoursofstorage, 2, '0'))_curt_$(lpad(curtailmentswitch, 2, '0'))"
+    labeller = "_hours$(lpad(hoursofstorage, 2, '0'))_curt_$(lpad(curtailmentswitch, 2, '0'))"
 
     # initialize year indices
     yearindex_cap .= collect(1:20) .+ 2020
@@ -66,57 +66,57 @@ function writedata_battery(P::NamedTuple, M::NamedTuple, S::NamedTuple, T::Named
     capprice[:, 2] .= capitalpricefall
     capprice[:, 3] .= solarpricefall
     capprice[:, 4] .= windpricefall
-    writedlm("$R/Capital_prices$(labeller).csv", capprice, ",")
+    writedlm("$R/Capital_prices/Capital_prices$(labeller).csv", capprice, ",")
 
     # battery price falls
     batterypricefall = (T.transeq.p_B_path_guess[:, 1:20]' ./ T.transeq.p_B_path_guess[:, 1]) .* 100
     batprice = [yearindex_cap batterypricefall]
-    writedlm("$R/Battery_prices$(labeller).csv", batprice, ",") 
+    writedlm("$R/Battery_prices/Battery_prices$(labeller).csv", batprice, ",") 
 
     # renewable shares
     sharepath[:, 1] .= yearindex_share
     sharepath[:, 2:14] .= 100 .* T.renewshare_path_region[:, 1:30]'
     sharepath[:, 15] .= 100 .* T.renewshareUS[1:30]
     sharepath[:, 16] .= 100 .* T.renewshare_path_world[:, 1:30]'
-    writedlm("$R/Renewable_share$(labeller).csv", sharepath, ",")
+    writedlm("$R/Renewable_share/Renewable_share$(labeller).csv", sharepath, ",")
 
     # write price results
     pricecsv .= [M.priceresults P.regions.csr_id]
-    writedlm("$R/pricecsv$(labeller).csv", pricecsv, ",")
+    writedlm("$R/Price/price$(labeller).csv", pricecsv, ",")
 
     # write GDP results
     G .= T.transeq.w_path_guess .* P.params.L ./ T.transeq.PC_path_guess
     GDPUS .= sum(G[1:743, :], dims = 1)
     GDPUS .= GDPUS ./ GDPUS[1]
-    writedlm("$R/GDPUS$(labeller).csv", GDPUS, ",")
+    writedlm("$R/GDP_US/GDPUS$(labeller).csv", GDPUS, ",")
 
     # write capital investment results
     capitalinvestment = Matrix{Float64}(undef, 2531, 502)
     capitalinvestment .= [P.regions.csr_id T.transeq.KR_path]
-    writedlm("$R/capitalinvestment$(labeller).csv", capitalinvestment, ",")
+    writedlm("$R/Capital_investment/capitalinvestment$(labeller).csv", capitalinvestment, ",")
 
     # write price results
     pricepath = Matrix{Float64}(undef, 2531, 502)
     pricepath .= [P.regions.csr_id T.transeq.p_E_path_guess] 
-    writedlm("$R/pricepath$(labeller).csv", pricepath, ",")
+    writedlm("$R/Price_path/pricepath$(labeller).csv", pricepath, ",")
 
     # write fossil fuel usage
     fosspath = Matrix{Float64}(undef, 30, 2)
     fosspath .=[yearindex_share T.transeq.fusage_total_path[1:30]]
-    writedlm("$R/Fossil_usage$(labeller).csv", fosspath, ",")
+    writedlm("$R/Fossil_usage/Fossil_usage$(labeller).csv", fosspath, ",")
 
     # write fossil fuel price
     fosspath .= [yearindex_share T.transeq.p_F_path_guess[1:30]]
-    writedlm("$R/Fossil_price$(labeller).csv", fosspath, ",")
+    writedlm("$R/Fossil_price/Fossil_price$(labeller).csv", fosspath, ",")
 
     # write welfare changes
     welfare = Matrix{Float64}(undef, 2531, 5)
     welfare .= [P.regions.csr_id S.welfare_wagechange S.welfare_capitalchange S.welfare_electricitychange S.welfare_fossilchange]
-    writedlm("$R/welfare.csv", welfare, ",")
+    writedlm("$R/Welfare/welfare$(labeller).csv", welfare, ",")
 
     welfare_2040 = Matrix{Float64}(undef, 2531, 5)
     welfare_2040 .= [P.regions.csr_id T.welfare_wagechange_2040 T.welfare_capitalchange_2040 T.welfare_electricitychange_2040 T.welfare_fossilchange_2040]
-    writedlm("$R/welfare_2040$(labeller).csv", welfare_2040, ",")
+    writedlm("$R/Welfare/welfare_2040$(labeller).csv", welfare_2040, ",")
 end
 
 end

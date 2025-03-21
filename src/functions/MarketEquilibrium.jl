@@ -4,11 +4,10 @@
 module MarketEquilibrium
 export hessinterior, obj, mycon, obj2, Price_Solve, wage_update_ms, grad_f
 
-import ..ParamsFunctions: StructParams
 
 
 function obj(Inputvec::Vector, power::Matrix, shifter::Matrix, KFshifter::Union{SubArray, Vector}, 
-        KRshifter::Vector, p_F::Union{Float64, Vector, Int}, params::StructParams)
+        KRshifter::Vector, p_F::Union{Float64, Vector, Int}, params)
     mid = length(Inputvec) ÷ 2
     Dvec = Inputvec[1:mid]
     Yvec = Inputvec[1+mid:end]
@@ -25,7 +24,7 @@ function obj(Inputvec::Vector, power::Matrix, shifter::Matrix, KFshifter::Union{
 end
 
 function obj2(Inputvec::Vector, power::Float64, shifter::Float64, KFshifter::Float64, 
-            KRshifter::Float64, p_F::Union{Float64, Int64}, params::StructParams)
+            KRshifter::Float64, p_F::Union{Float64, Int64}, params)
     mid = length(Inputvec) ÷ 2
     Dvec = Inputvec[1:mid]
     Yvec = Inputvec[1+mid:end]
@@ -40,7 +39,7 @@ function obj2(Inputvec::Vector, power::Float64, shifter::Float64, KFshifter::Flo
     
 end
 
-function Price_Solve(Inputvec::Vector{Float64}, shifter::Union{Matrix, Float64}, Jlength::Int64, params::StructParams)
+function Price_Solve(Inputvec::Vector{Float64}, shifter::Union{Matrix, Float64}, Jlength::Int64, params)
     mid = length(Inputvec) ÷ 2
     Dvec = Inputvec[1:mid]
 
@@ -53,7 +52,7 @@ end
 
 
 function location_prices!(pijs::Vector{Matrix{Float64}}, PCs::Matrix{Float64}, Xjdashs::Matrix{Float64}, Yjdashs::Matrix{Float64},
-    w0::Vector{Float64}, p_E_D::Vector{Float64}, params::StructParams, Ej::Matrix{Float64}, 
+    w0::Vector{Float64}, p_E_D::Vector{Float64}, params, Ej::Matrix{Float64}, 
     p_F::Union{Float64, Vector, Int}, r::Matrix{Float64})
 
     for i = 1:params.I
@@ -73,7 +72,7 @@ function location_prices!(pijs::Vector{Matrix{Float64}}, PCs::Matrix{Float64}, X
 end
 
 
-function update_wage_data!(tpijs::Matrix, params::StructParams, w0::Union{Matrix, Vector}, pES::Union{Vector, Matrix},
+function update_wage_data!(tpijs::Matrix, params, w0::Union{Matrix, Vector}, pES::Union{Vector, Matrix},
     p_F::Union{Float64, Vector, Int}, r::Union{Vector, Matrix}, Ej, PCs::Matrix, Xjdashs::Matrix,
     Yjdashs::Matrix)
 
@@ -132,7 +131,7 @@ function update_wage_data!(tpijs::Matrix, params::StructParams, w0::Union{Matrix
 
 end
 
-function price_adjustments!(PC::Vector{Float64}, PCs::Array{Float64}, params::StructParams, w0::Union{Vector, Matrix}, 
+function price_adjustments!(PC::Vector{Float64}, PCs::Array{Float64}, params, w0::Union{Vector, Matrix}, 
                         Xjdashs::Array{Float64}, Xj::Union{Vector, Matrix}, pES::Union{Vector, Matrix}, 
                         pED::Union{Vector, Matrix}, p_F::Union{Float64, Vector, Int}, W_Real::Vector{Float64}, 
                         w_adjustment_factor::Union{Vector, Matrix}, Xjdash::Matrix{Float64})
@@ -148,7 +147,7 @@ function price_adjustments!(PC::Vector{Float64}, PCs::Array{Float64}, params::St
 end
 
 function wage_update_ms(w::Union{Vector, Matrix}, p_E_D::Union{Vector, Matrix},p_E_S::Union{Vector, Matrix}, p_F::Union{Float64, Vector, Int}, D_E::Vector, Y_E::Vector, 
-    r::Union{Vector, Matrix}, KP::Union{Vector, Matrix}, Pi::Vector, fossil::Union{Vector, Matrix, Int}, params::StructParams)
+    r::Union{Vector, Matrix}, KP::Union{Vector, Matrix}, Pi::Vector, fossil::Union{Vector, Matrix, Int}, params)
     
     # intermediate variable allocations
     PCs = Array{Float64}(undef, 2531, 10)
