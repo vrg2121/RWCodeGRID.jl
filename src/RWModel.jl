@@ -1,5 +1,5 @@
 module RWModel
-export greet, run_model
+export greet, run_model, ModelConfig
 
 greet() = print("RWModel is working!")
 
