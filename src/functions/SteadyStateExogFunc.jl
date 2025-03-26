@@ -7,6 +7,7 @@ import ..DataLoadsFunc: StructGsupply, StructRWParams
 using JuMP, Ipopt
 using ..RegionModel, ..MarketEquilibrium
 
+import DrawGammas: StructParams
 import ..ModelConfiguration: ModelConfig
 export ss_second_loop, grad_f, new_obj2, new_grad2, ss_load_mat, ss_update_params!, 
        new_obj_f, new_grad_f, set_battery, update_battery, ss_optimize_region!, solve_power_output_exog, 
@@ -14,8 +15,8 @@ export ss_second_loop, grad_f, new_obj2, new_grad2, ss_load_mat, ss_update_param
 
 
 function ss_optimize_region!(result_price_LR::Vector, result_Dout_LR::Matrix, result_Yout_LR::Matrix, result_YFout_LR::Vector, Lossfac_LR::Matrix,
-        pg_LR_s::Matrix, majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc_LR::Matrix, Lsector::Matrix, params, 
-        w_LR::Matrix, rP_LR::Vector, p_E_LR::Matrix, kappa::Int, regionParams::StructRWParams, KF_LR::Matrix, p_F_LR::Int,
+        pg_LR_s::Matrix, majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc_LR::Matrix, Lsector::Matrix, params::StructParams, 
+        w_LR::Matrix, rP_LR::Vector, p_E_LR::Matrix, kappa::Float64, regionParams::StructRWParams, KF_LR::Matrix, p_F_LR::Int,
         linconscount::Int, KR_LR_S::Matrix, KR_LR_W::Matrix, result_Yout_init::Matrix{Matrix{Float64}}, niters::Int)
 
     Threads.@threads for kk in 1:(params.N - 1)
@@ -37,8 +38,8 @@ function ss_optimize_region!(result_price_LR::Vector, result_Dout_LR::Matrix, re
 
 end
 
-function ss_second_loop(majorregions::DataFrame, Lsector::Matrix, laboralloc::Matrix, params, w_LR::Matrix, rP_LR::Union{Matrix, Vector},
-    result_Dout_LR::Matrix, result_Yout_LR::Matrix, pg_LR_s::Matrix, p_E_LR::Matrix, kappa::Int,
+function ss_second_loop(majorregions::DataFrame, Lsector::Matrix, laboralloc::Matrix, params::StructParams, w_LR::Matrix, rP_LR::Union{Matrix, Vector},
+    result_Dout_LR::Matrix, result_Yout_LR::Matrix, pg_LR_s::Matrix, p_E_LR::Matrix, kappa::Float64,
     regionParams::StructRWParams, KR_LR_S::Matrix, KR_LR_W::Matrix, KF_LR::Matrix, kk::Int, p_F_LR::Int)
     ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
     nr = majorregions.rowid[kk] - majorregions.rowid2[kk] + 1
@@ -152,7 +153,7 @@ function new_grad_f(g, x...)
     return
 end
 
-function set_battery(KR_LR::Matrix, hoursofstorage::Int64, params, Initialprod::Int64, T::Int64)
+function set_battery(KR_LR::Matrix, hoursofstorage::Int64, params::StructParams, Initialprod::Int64, T::Int64)
     B_LR = KR_LR .* hoursofstorage
     Depreciation_B = B_LR .* params.deltaB
     cumsum = sum(Depreciation_B)
@@ -162,7 +163,7 @@ function set_battery(KR_LR::Matrix, hoursofstorage::Int64, params, Initialprod::
     return p_B
 end
 
-function update_battery(KR_LR::Matrix, hoursofstorage::Int64, params)
+function update_battery(KR_LR::Matrix, hoursofstorage::Int64, params::StructParams)
     B_LR = KR_LR .* hoursofstorage
     Depreciation_B = B_LR .* params.deltaB
     cumsum = sum(Depreciation_B)
@@ -172,11 +173,11 @@ function update_battery(KR_LR::Matrix, hoursofstorage::Int64, params)
     return p_B
 end
 
-function solve_power_output_exog(RWParams::StructRWParams, params, RunBatteries::Int,
+function solve_power_output_exog(RWParams::StructRWParams, params::StructParams, RunBatteries::Int,
     Initialprod::Int, R_LR::Float64, majorregions::DataFrame, Linecounts::DataFrame, linconscount::Int,
     regionParams::StructRWParams, pB_shifter::Float64, T::Int, mrkteq::NamedTuple, 
     projectionssolar::Matrix, projectionswind::Matrix, config::ModelConfig, exogindex::Int, 
-    p_KR_init_S::Float64, p_KR_init_W::Float64, kappa::Int, G::String)
+    p_KR_init_S::Float64, p_KR_init_W::Float64, kappa::Float64, G::String)
 
     laboralloc_LR, KR_LR_S, KR_LR_W, p_E_LR, w_LR, result_Dout_LR, result_Yout_LR, PC_guess_LR = ss_load_mat(G);
 

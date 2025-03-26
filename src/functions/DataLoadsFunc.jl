@@ -10,13 +10,9 @@ import Tables: Tables
 # load functions
 using ..DataAdjustments
 
-
-export load_csv_data, w_i!, create_RWParams!, fill_RWParams, sec_shares!,
-        create_FFsupplyCurves, fill_FFsupply, create_StructGsupply!,
-        fill_Gsupply, linear_map, create_curtmat!, battery_req!
-
 # export structs for type stability when used in functions
-export StructRWParams
+export StructRWParams, StructGsupply, StructFFsupplyCurves, load_csv_data, w_i!, 
+fill_RWParams, sec_shares!, fill_FFsupply, fill_Gsupply, create_curtmat!, battery_req!
 
 # load functions to process data
 mutable struct StructRWParams

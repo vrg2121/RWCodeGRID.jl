@@ -12,8 +12,8 @@ import ..ParamsFunctions: StructParams
 
 using ..MarketEquilibrium
 
-function data_set_up_imp(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, laboralloc::Matrix, Lsector::Matrix, params,
-    wage::Union{Matrix, Vector}, rP::Vector, pg_n_s::Matrix, pE::Union{Vector, Matrix}, kappa::Int, regionParams, KF::Matrix, p_F::Union{Int64, Float64}, 
+function data_set_up_imp(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, laboralloc::Matrix, Lsector::Matrix, params::StructParams,
+    wage::Union{Matrix, Vector}, rP::Vector, pg_n_s::Matrix, pE::Union{Vector, Matrix}, kappa::Float64, regionParams, KF::Matrix, p_F::Union{Int64, Float64}, 
     linconscount::Int, KR_S::Matrix, KR_W::Matrix, Linecounts_imp::DataFrame, RegionImp)
     local ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
     local n = majorregions.n[kk]

@@ -9,6 +9,7 @@ import Random: Random
 import DataFrames: DataFrame
 import MAT: matwrite
 
+import DrawGammas: StructAllParams
 import ..ModelConfiguration: ModelConfig
 
 # import parameters, data and variables
@@ -16,12 +17,12 @@ import ..ModelConfiguration: ModelConfig
 export solve_transition
 
 """
-    solve_transition(P::NamedTuple, DL::NamedTuple, M::NamedTuple, S::NamedTuple, Subsidy::Int, config::ModelConfig, G::String)
+    solve_transition(P::StructAllParams, DL::NamedTuple, M::NamedTuple, S::NamedTuple, Subsidy::Int, config::ModelConfig, G::String)
 
 Model of the renewable energy transition up to 2040.
 
 ## Inputs
-- `P::NamedTuple` -- NamedTuple of parameters. Output of `P = setup_parameters(D, G)`
+- `P::StructAllParams` -- Struct of parameters. Created in local package DrawGammas
 - `D::NamedTuple` -- NamedTuple of model data. Output of `DL = load_data(P, D)`
 - `M::NamedTuple` -- NamedTuple of market equilibrium. Output of `M = solve_market(P, DL, config, G)`
 - `S::NamedTuple` -- NamedTuple of steady state equilibrium. Output of `S = solve_steadystate(P, DL, M, config, Guesses)`
@@ -37,7 +38,7 @@ Named tuple containing path of renewable energy transition across specific regio
 ## Notes
 Calculated with some variations when RunTransition==1, RunBatteries==1, RunExog==1, RunCurtailment==1. Not calculated when RunImprovement==1.
 """
-function solve_transition(P::NamedTuple, DL::NamedTuple, M::NamedTuple, S::NamedTuple, Subsidy::Int, config::ModelConfig, G::String)
+function solve_transition(P::StructAllParams, DL::NamedTuple, M::NamedTuple, S::NamedTuple, Subsidy::Int, config::ModelConfig, G::String)
     # set st 
     st = zeros(P.params.J, P.T + 1)
     if Subsidy == 1

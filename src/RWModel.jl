@@ -11,6 +11,12 @@ greet() = print("RWModel is working!")
 include("./ModelConfiguration.jl")
 import .ModelConfiguration: ModelConfig
 
+# load struct for model Params
+#import Pkg
+#Pkg.add("./DrawGammas")
+using DrawGammas #StructAllParams, StructParams
+
+
 # Load Data
 include("./functions/DataAdjustments.jl")
 include("./functions/DataLoadsFunc.jl")
@@ -27,7 +33,7 @@ import .Market: solve_market
 # Long Run Equilibrium
 include("./functions/SteadyStateFunctions.jl")
 include("./SteadyState.jl")
-import .SteadyState: solve_steadystate
+import .SteadyState: solve_steadystate, StructSteadyState
 
 # Run Transitional Dynamics
 include("./functions/TransitionFunctions.jl")
@@ -59,14 +65,15 @@ import .TransitionExog: solve_transition_exog
 include("./WriteDataExog.jl")
 import .WriteDataExog: writedata_exog
 
-function run_model(config::ModelConfig, D::String, G::String, R::String, P::NamedTuple)
+function run_model(config::ModelConfig, D::String, G::String, R::String, P::StructAllParams)
 
     # ---------------------------------------------------------------------------- #
     #                                  Data Loads                                  #
     # ---------------------------------------------------------------------------- #
     
     println("Loading data inputs...")
-    DL = load_data(P, D);
+    DL = load_data(P, D); #DataLoads.jl
+    # Base.summarysize(DL) = 475.74 MB
 
     # ---------------------------------------------------------------------------- #
     #                              Initial Equilibrium                             #

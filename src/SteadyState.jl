@@ -8,9 +8,11 @@ import Interpolations: interpolate, Gridded, Linear
 
 # import parameters, data and variables
 import ..ModelConfiguration: ModelConfig
+import DrawGammas: StructAllParams
+import ..SteadyStateFunctions: StructPowerOutput
 
 # export variables
-export solve_steadystate
+export solve_steadystate, StructSteadyState
 
 
 # ---------------------------------------------------------------------------- #
@@ -48,14 +50,26 @@ Calculating a 3D Interpolation (MATLAB interp3()) using Interpolations.jl:
   this by comparing graphs of the interpolation grids between MATLAB and Julia.
 """
 
+mutable struct StructSteadyState
+    sseq::StructPowerOutput                      # Likely a custom struct; use specific type if known
+    interp3::Any                  # Interpolations.GriddedInterpolation{...}
+    GDP::Float64
+    wr::Vector{Float64}
+    wagechange::Matrix{Float64}
+    welfare_wagechange::Vector{Float64}
+    welfare_capitalchange::Vector{Float64}
+    welfare_electricitychange::Vector{Float64}
+    welfare_fossilchange::Vector{Float64}
+end
+
 
 """
-    solve_steadystate(P::NamedTuple, D::NamedTuple, M::NamedTuple, config::ModelConfig, G::String)
+    solve_steadystate(P::StructAllParams, D::NamedTuple, M::NamedTuple, config::ModelConfig, G::String)
 
 Solve the steady-state equilibrium for wind and solar in the energy grid.
 
 # Arguments
-- `P::NamedTuple`: NamedTuple of parameters, output of `P = setup_parameters(D, G)`
+- `P::StructAllParams`: Struct of parameters, output of `P = setup_parameters(D, G)`
 - `D::NamedTuple`: NamedTuple of model data, output of `DL = load_data(P, D)`
 - `M::NamedTuple`: NamedTuple of market equilibrium, output of `M = solve_market(P, DL, config, G)`
 - `config::ModelConfig`: User defined model configurations.
@@ -67,7 +81,7 @@ NamedTuple containing steady-state levels of GDP, wages, labor, capital, electri
 # Notes
 Updates some guesses when hours of storage = 0.
 """
-function solve_steadystate(P::NamedTuple, D::NamedTuple, M::NamedTuple, config::ModelConfig, G::String)
+function solve_steadystate(P::StructAllParams, D::NamedTuple, M::NamedTuple, config::ModelConfig, G::String)
 
     pB_shifter = P.pB_shifter
     if config.RunBatteries == 1
@@ -160,16 +174,16 @@ function solve_steadystate(P::NamedTuple, D::NamedTuple, M::NamedTuple, config::
     w_real_LR = sseq.w_LR ./ sseq.PC_guess_LR
     GDP_ind_LR = (sseq.w_LR .* P.params.L .+ sseq.p_E_LR .* sseq.D_LR .+ sseq.rP_LR .* sseq.KP_LR .+ sseq.p_F_LR .* fusage_ind_LR) ./ sseq.PC_guess_LR
 
-    return (
-    sseq = sseq,
-    interp3 = interp3,
-    GDP = GDP,
-    wr = wr,
-    wagechange = wagechange,
-    welfare_wagechange = welfare_wagechange,
-    welfare_capitalchange = welfare_capitalchange,
-    welfare_electricitychange = welfare_electricitychange,
-    welfare_fossilchange = welfare_fossilchange
+    return StructSteadyState(
+    sseq,
+    interp3,
+    GDP,
+    wr,
+    wagechange,
+    welfare_wagechange,
+    welfare_capitalchange,
+    welfare_electricitychange,
+    welfare_fossilchange
     )
 
 end

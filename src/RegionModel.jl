@@ -8,11 +8,12 @@ import Random: Random
 import LinearAlgebra: I
 #import SparseArrays: sparse
 import ..DataLoadsFunc: StructRWParams
+import DrawGammas: StructParams
 
 using ..MarketEquilibrium
 
-function data_set_up(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params,
-    wage::Union{Matrix, Vector}, rP::Vector, pg_n_s::Matrix, pE::Union{Vector, Matrix}, kappa::Int, regionParams, KF::Matrix, p_F::Union{Int64, Float64}, 
+function data_set_up(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params::StructParams,
+    wage::Union{Matrix, Vector}, rP::Vector, pg_n_s::Matrix, pE::Union{Vector, Matrix}, kappa::Float64, regionParams, KF::Matrix, p_F::Union{Int64, Float64}, 
     linconscount::Int, KR_S::Matrix, KR_W::Matrix, method::String)
     local ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
     local n = majorregions.n[kk]
@@ -95,8 +96,8 @@ function data_set_up(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RW
     return l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid
 end
 
-function data_set_up_exog(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params,
-    wage::Union{Matrix, Vector}, rP::Vector, pg_n_s::Matrix, pE::Union{Vector, Matrix}, kappa::Int, regionParams, KF::Matrix, p_F::Union{Int64, Float64}, 
+function data_set_up_exog(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params::StructParams,
+    wage::Union{Matrix, Vector}, rP::Vector, pg_n_s::Matrix, pE::Union{Vector, Matrix}, kappa::Float64, regionParams, KF::Matrix, p_F::Union{Int64, Float64}, 
     linconscount::Int, KR_S::Matrix, KR_W::Matrix, result_Dout_LR, result_Yout_LR)
     local ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
     local n = majorregions.n[kk]
@@ -168,7 +169,7 @@ function add_model_variable(model::Model, LB::Vector, l_guess::Int, UB::Vector, 
     return @variable(model, LB[i] <= x[i=1:l_guess] <= UB[i], start=guess[i])
 end
 
-function add_model_constraint(model::Model, regionParams, params, kk::Int, mid::Int)
+function add_model_constraint(model::Model, regionParams, params::StructParams, kk::Int, mid::Int)
     x = model[:x]
     Pvec = @expression(model, x[mid+1:end] .- x[1:mid])
     sPvec = @expression(model, sum(Pvec))
@@ -179,13 +180,13 @@ function add_model_constraint(model::Model, regionParams, params, kk::Int, mid::
 
 end
 
-function add_model_objective(model::Model, power::Matrix, shifter::Matrix, KFshifter::Union{Vector, SubArray}, KRshifter::Vector, p_F::Union{Float64, Vector, Int}, params)
+function add_model_objective(model::Model, power::Matrix, shifter::Matrix, KFshifter::Union{Vector, SubArray}, KRshifter::Vector, p_F::Union{Float64, Vector, Int}, params::StructParams)
     x = model[:x]
     @objective(model, Min, obj(x, power, shifter, KFshifter, KRshifter, p_F, params))
 end
 
 function add_model_objective_test(model::Model, power::Matrix, shifter::Matrix, KFshifter::Union{Vector, SubArray}, 
-            KRshifter::Vector, p_F::Union{Float64, Vector, Int}, params, mid::Int, power2::Float64)
+            KRshifter::Vector, p_F::Union{Float64, Vector, Int}, params::StructParams, mid::Int, power2::Float64)
     local x = model[:x]
     local Dsec = @expression(model, x[1:mid] .* ones(1, params.I))
     local Yvec = @expression(model, x[1+mid:end])
@@ -199,7 +200,7 @@ function add_model_objective_test(model::Model, power::Matrix, shifter::Matrix, 
     
 end
 
-function solve_model(kk::Int, l_guess::Int, LB::Vector, UB::Vector, guess::Union{Vector, Matrix}, regionParams::StructRWParams, params, power::Matrix, 
+function solve_model(kk::Int, l_guess::Int, LB::Vector, UB::Vector, guess::Union{Vector, Matrix}, regionParams::StructRWParams, params::StructParams, power::Matrix, 
     shifter::Matrix, KFshifter::Union{SubArray, Vector}, KRshifter::Vector, p_F::Union{Float64, Vector, Int}, mid::Int)
     println("solving the model for region $kk")
     model = Model(Ipopt.Optimizer)

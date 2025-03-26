@@ -3,16 +3,17 @@ module WriteData
 # import package 
 import DelimitedFiles: writedlm
 import ..ModelConfiguration: ModelConfig
+import DrawGammas: StructAllParams
 
 export writedata
 
 """
-    writedata(P::NamedTuple, M::NamedTuple, S::NamedTuple, T::NamedTuple, config::ModelConfig, R::String)
+    writedata(P::StructAllParams, M::NamedTuple, S::NamedTuple, T::NamedTuple, config::ModelConfig, R::String)
 
 Writes data outputs to .csv files for analysis. All outputs are in the Results folder
 
 ## Inputs
-- `P::NamedTuple` -- NamedTuple of parameters. Output of `P = setup_parameters(D, G)`
+- `P::StructAllParams` -- Struct of parameters. Created in local package DrawGammas
 - `D::NamedTuple` -- NamedTuple of model data. Output of `DL = load_data(P, D)`
 - `M::NamedTuple` -- NamedTuple of market equilibrium. Output of `M = solve_market(P, DL, config, G)`
 - `S::NamedTuple` -- NamedTuple of steady state equilibrium. Output of `S = solve_steadystate(P, DL, M, config, Guesses)`
@@ -27,7 +28,7 @@ Model results (with and without subsidy) for capital and battery price falls, re
 ## Notes
 This function writes data only when RunTransition==1.
 """
-function writedata(P::NamedTuple, DL::NamedTuple, M::NamedTuple, S::NamedTuple, T::NamedTuple, Subsidy::Int, config::ModelConfig, R::String)
+function writedata(P::StructAllParams, DL::NamedTuple, M::NamedTuple, S::NamedTuple, T::NamedTuple, Subsidy::Int, config::ModelConfig, R::String)
     # initialize data
     yearindex_cap = Vector{Int64}(undef, 20)
     yearindex_share = Vector{Int64}(undef, 30)

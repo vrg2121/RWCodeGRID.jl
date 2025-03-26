@@ -3,17 +3,18 @@ module WriteDataBattery
 # import package 
 import DelimitedFiles: writedlm
 import ..ModelConfiguration: ModelConfig
+import DrawGammas: StructAllParams
 
 # import data from model
 export writedata_battery
 
 """
-    writedata_battery(P::NamedTuple, M::NamedTuple, S::NamedTuple, T::NamedTuple, config::ModelConfig, R::String)
+    writedata_battery(P::StructAllParams, M::NamedTuple, S::NamedTuple, T::NamedTuple, config::ModelConfig, R::String)
 
 Writes data outputs to .csv files for analysis. All outputs are in the Results folder
 
 ## Inputs
-- `P::NamedTuple` -- NamedTuple of parameters. Output of `P = setup_parameters(D, G)`
+- `P::StructAllParams` -- Struct of parameters. Created in local package DrawGammas
 - `D::NamedTuple` -- NamedTuple of model data. Output of `DL = load_data(P, D)`
 - `M::NamedTuple` -- NamedTuple of market equilibrium. Output of `M = solve_market(P, DL, config, G)`
 - `S::NamedTuple` -- NamedTuple of steady state equilibrium. Output of `S = solve_steadystate(P, DL, M, config, Guesses)`
@@ -28,7 +29,7 @@ Model results for capital and battery price falls, renewable shares, US GDP outc
 ## Notes
 This function writes data when RunBattery==1 or RunCurtailment==1.
 """
-function writedata_battery(P::NamedTuple, M::NamedTuple, S::NamedTuple, T::NamedTuple, config::ModelConfig, R::String)
+function writedata_battery(P::StructAllParams, M::NamedTuple, S::NamedTuple, T::NamedTuple, config::ModelConfig, R::String)
 
     curtailmentswitch = P.curtailmentswitch
     hoursofstorage = config.hoursofstorage

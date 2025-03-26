@@ -3,17 +3,18 @@ using ..SteadyStateExogFunc, ..DataAdjustments, ..MarketEquilibrium
 
 # import parameters, data and variables
 import ..ModelConfiguration: ModelConfig
+import DrawGammas: StructAllParams
 
 # export variables
 export solve_steadystate_exog
 
 """
-    solve_steadystate_exog(P::NamedTuple, DL::NamedTuple, M::NamedTuple, config::ModelConfig, exogindex::Int64, G::String)
+    solve_steadystate_exog(P::StructAllParams, DL::NamedTuple, M::NamedTuple, config::ModelConfig, exogindex::Int64, G::String)
 
 Solve the steadystate equilibrium for wind and solar in the energy grid.
 
 ## Inputs
-- `P::NamedTuple` -- NamedTuple of parameters. Output of `P = setup_parameters(D, G)`
+- `P::StructAllParams` -- Struct of parameters. Computed in the local package DrawGammas
 - `DL::NamedTuple` -- NamedTuple of model data. Output of `DL = load_data(P, D)`
 - `M::NamedTuple` -- NamedTuple of market equilibrium. Output of `M = solve_market(P, DL, config, G)`
 - `exogindex::Int64` -- The exogenous tech index: 1, 2, 3
@@ -26,7 +27,7 @@ Named tuple containing steadystate with exogenous techs levels of GDP, wages, la
 ## Notes
 Calculated for only when RunExog==1.
 """
-function solve_steadystate_exog(P::NamedTuple, DL::NamedTuple, M::NamedTuple, config::ModelConfig, exogindex::Int64, G::String)
+function solve_steadystate_exog(P::StructAllParams, DL::NamedTuple, M::NamedTuple, config::ModelConfig, exogindex::Int64, G::String)
     # ---------------------------------------------------------------------------- #
     #                             Step 0: Initial Guess                            #
     # ---------------------------------------------------------------------------- #

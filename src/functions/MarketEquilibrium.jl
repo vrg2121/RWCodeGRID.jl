@@ -4,10 +4,12 @@
 module MarketEquilibrium
 export hessinterior, obj, mycon, obj2, Price_Solve, wage_update_ms, grad_f
 
+import DrawGammas: StructParams
+
 
 
 function obj(Inputvec::Vector, power::Matrix, shifter::Matrix, KFshifter::Union{SubArray, Vector}, 
-        KRshifter::Vector, p_F::Union{Float64, Vector, Int}, params)
+        KRshifter::Vector, p_F::Union{Float64, Vector, Int}, params::StructParams)
     mid = length(Inputvec) ÷ 2
     Dvec = Inputvec[1:mid]
     Yvec = Inputvec[1+mid:end]
@@ -24,7 +26,7 @@ function obj(Inputvec::Vector, power::Matrix, shifter::Matrix, KFshifter::Union{
 end
 
 function obj2(Inputvec::Vector, power::Float64, shifter::Float64, KFshifter::Float64, 
-            KRshifter::Float64, p_F::Union{Float64, Int64}, params)
+            KRshifter::Float64, p_F::Union{Float64, Int64}, params::StructParams)
     mid = length(Inputvec) ÷ 2
     Dvec = Inputvec[1:mid]
     Yvec = Inputvec[1+mid:end]
@@ -39,7 +41,7 @@ function obj2(Inputvec::Vector, power::Float64, shifter::Float64, KFshifter::Flo
     
 end
 
-function Price_Solve(Inputvec::Vector{Float64}, shifter::Union{Matrix, Float64}, Jlength::Int64, params)
+function Price_Solve(Inputvec::Vector{Float64}, shifter::Union{Matrix, Float64}, Jlength::Int64, params::StructParams)
     mid = length(Inputvec) ÷ 2
     Dvec = Inputvec[1:mid]
 
@@ -147,7 +149,7 @@ function price_adjustments!(PC::Vector{Float64}, PCs::Array{Float64}, params, w0
 end
 
 function wage_update_ms(w::Union{Vector, Matrix}, p_E_D::Union{Vector, Matrix},p_E_S::Union{Vector, Matrix}, p_F::Union{Float64, Vector, Int}, D_E::Vector, Y_E::Vector, 
-    r::Union{Vector, Matrix}, KP::Union{Vector, Matrix}, Pi::Vector, fossil::Union{Vector, Matrix, Int}, params)
+    r::Union{Vector, Matrix}, KP::Union{Vector, Matrix}, Pi::Vector, fossil::Union{Vector, Matrix, Int}, params::StructParams)
     
     # intermediate variable allocations
     PCs = Array{Float64}(undef, 2531, 10)
@@ -179,7 +181,7 @@ end
 
 """
 
-function mycon(Inputvec::Vector, mat::Matrix, params)
+function mycon(Inputvec::Vector, mat::Matrix, params::StructParams)
     mid = length(Inputvec) ÷ 2
 
     Dvec = @view Inputvec[1:mid]

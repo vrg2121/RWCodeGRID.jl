@@ -7,6 +7,8 @@ import Random: Random
 import SparseArrays: sparse
 import ..RegionModel: solve_model
 import ..DataLoadsFunc: StructGsupply, StructRWParams
+import DrawGammas: StructParams
+
 using Ipopt, JuMP
 
 using ..MarketEquilibrium
@@ -14,7 +16,7 @@ using ..MarketEquilibrium
 export sectoral_allocations!, update_capital_price!, update_battery_prices!, transition_electricity_US_Europe!, transition_electricity_other_countries!,
         transition_electricity_off_grid!, fill_paths!, smooth_prices!, update_fossil_market!, solve_transition_eq
 
-function sectoral_allocations!(Lsectorpath_guess::Array{Float64, 3}, laboralloc_path::Array{Float64, 3}, decayp::Float64, params, laboralloc_init::Matrix, sseq::NamedTuple, T::Int)
+function sectoral_allocations!(Lsectorpath_guess::Array{Float64, 3}, laboralloc_path::Array{Float64, 3}, decayp::Float64, params::StructParams, laboralloc_init::Matrix, sseq::NamedTuple, T::Int)
     lpg = [exp(decayp * i) for j in 1:params.J, i in 0:T, k in 1:params.I]
     Lsectorpath_guess .= permutedims(lpg, [1, 3, 2])
     laboralloc_path .= sseq.laboralloc_LR .+ (laboralloc_init .- sseq.laboralloc_LR) .* Lsectorpath_guess
@@ -23,7 +25,7 @@ end
 
 function update_capital_price!(p_KR_path_S::Matrix{Float64}, p_KR_path_W::Matrix{Float64}, p_KR_path_guess_S::Matrix{Float64}, 
     p_KR_path_guess_W::Matrix{Float64}, KR_path_S::Matrix{Float64}, KR_path_W::Matrix{Float64}, 
-    params, Initialprod::Int, KR_init_S::Matrix{Float64}, KR_init_W::Matrix{Float64})
+    params::StructParams, Initialprod::Int, KR_init_S::Matrix{Float64}, KR_init_W::Matrix{Float64})
 
     # initialize intermediate variables
     Qtotal_path_S = zeros(1, 501)
@@ -65,7 +67,7 @@ function update_capital_price!(p_KR_path_S::Matrix{Float64}, p_KR_path_W::Matrix
 end
 
 function update_battery_prices!(KR_path::Matrix{Float64}, Qtotal_path_B::Matrix{Float64}, # variables to be modified
-    KR_path_S::Matrix{Float64}, KR_path_W::Matrix{Float64}, params, 
+    KR_path_S::Matrix{Float64}, KR_path_W::Matrix{Float64}, params::StructParams, 
     hoursofstorage_path::Matrix{Float64}, RWParams::StructRWParams, Initialprod::Int, hoursofstorage::Int)
 
     # initialize intermediate variables
@@ -92,8 +94,8 @@ function update_battery_prices!(KR_path::Matrix{Float64}, Qtotal_path_B::Matrix{
     Qtotal_path_B[1] = Initialprod+sum(RWParams.KR) * hoursofstorage
 end
 
-function data_set_up_transition(t::Int, kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RWParams, laboralloc_path::Array, Lsectorpath_guess::Array, params,
-    w_path_guess::Union{Matrix, Vector}, rP_path::Matrix, pg_path_s::Array, p_E_path_guess::Union{Vector, Matrix}, kappa::Int, regionParams, KF_path::Matrix, p_F_path_guess::Transpose, 
+function data_set_up_transition(t::Int, kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RWParams, laboralloc_path::Array, Lsectorpath_guess::Array, params::StructParams,
+    w_path_guess::Union{Matrix, Vector}, rP_path::Matrix, pg_path_s::Array, p_E_path_guess::Union{Vector, Matrix}, kappa::Float64, regionParams, KF_path::Matrix, p_F_path_guess::Transpose, 
     linconscount::Int, KR_path_S::Matrix, KR_path_W::Matrix)
     local ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
     local n = majorregions.n[kk]
@@ -155,9 +157,9 @@ end
     
 function transition_electricity_US_Europe!(result_price_path::Matrix, result_Dout_path::Matrix, result_Yout_path::Matrix, result_YFout_path::Matrix, # modified variables
     majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc_path::Array,
-    Lsectorpath_guess::Array, params, w_path_guess::Matrix{Float64}, rP_path::Matrix{Float64},
+    Lsectorpath_guess::Array, params::StructParams, w_path_guess::Matrix{Float64}, rP_path::Matrix{Float64},
     linconscount::Int, pg_path_s::Array, p_F_path_guess::Transpose, p_E_path_guess::Matrix{Float64},
-    kappa::Int, KR_path_S::Matrix{Float64}, KR_path_W::Matrix{Float64}, KF_path::Matrix{Float64}, capT::Int, regionParams::StructRWParams)
+    kappa::Float64, KR_path_S::Matrix{Float64}, KR_path_W::Matrix{Float64}, KF_path::Matrix{Float64}, capT::Int, regionParams::StructRWParams)
 
     for kk=1:2
         #kk=1
@@ -212,7 +214,7 @@ end
 
 function transition_electricity_other_countries!(result_price_path::Matrix, result_Dout_path::Matrix, result_Yout_path::Matrix, result_YFout_path::Matrix, # modified variables
     majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc_path::Array,
-    Lsectorpath_guess::Array, params, w_path_guess::Matrix{Float64}, rP_path::Matrix{Float64},
+    Lsectorpath_guess::Array, params::StructParams, w_path_guess::Matrix{Float64}, rP_path::Matrix{Float64},
     linconscount::Int, pg_path_s::Array, p_F_path_guess::Transpose, p_E_path_guess::Matrix{Float64},
     kappa, KR_path_S::Matrix{Float64}, KR_path_W::Matrix{Float64}, KF_path::Matrix{Float64}, capT::Int, regionParams::StructRWParams)
 
@@ -267,9 +269,9 @@ end
 
 function transition_electricity_off_grid!(result_price_path::Matrix, result_Dout_path::Matrix, result_Yout_path::Matrix, result_YFout_path::Matrix, # modified variables
     majorregions::DataFrame, laboralloc_path::Array,
-    Y_path::Matrix{Float64}, Lsectorpath_guess::Array, params, w_path_guess::Matrix{Float64}, rP_path::Matrix{Float64},
+    Y_path::Matrix{Float64}, Lsectorpath_guess::Array, params::StructParams, w_path_guess::Matrix{Float64}, rP_path::Matrix{Float64},
     pg_path_s::Array, p_F_path_guess::Transpose, p_E_path_guess::Matrix{Float64},
-    kappa::Int, KR_path_S::Matrix{Float64}, KR_path_W::Matrix{Float64}, KF_path::Matrix{Float64}, capT::Int, regionParams::StructRWParams, D_path::Matrix{Float64})
+    kappa::Float64, KR_path_S::Matrix{Float64}, KR_path_W::Matrix{Float64}, KF_path::Matrix{Float64}, capT::Int, regionParams::StructRWParams, D_path::Matrix{Float64})
 
     kk = params.N
     for t=1:capT
@@ -354,7 +356,7 @@ function transition_electricity_off_grid!(result_price_path::Matrix, result_Dout
 end
 
 function fill_paths!(p_E_path_guess::Matrix, D_path::Matrix, Y_path::Matrix, YF_path::Matrix, PI_path::Matrix, 
-                    params, majorregions::DataFrame, result_price_path::Matrix, result_Dout_path::Matrix, 
+                    params::StructParams, majorregions::DataFrame, result_price_path::Matrix, result_Dout_path::Matrix, 
                     result_Yout_path::Matrix, result_YFout_path::Matrix, capT::Int)
 
     # Did not parallelize because creating intermediate data structures could slow memory
@@ -402,7 +404,7 @@ function smooth_prices!(p_E_path_guess::Matrix{Float64},
 end
 
 function update_fossil_market!(diffpF::Float64, fossilsales_path::Matrix, p_F_path_guess::Transpose{Float64, Vector{Float64}},
-                                laboralloc_path::Array, D_path::Matrix, params, p_E_path_guess::Matrix, YF_path::Matrix, 
+                                laboralloc_path::Array, D_path::Matrix, params::StructParams, p_E_path_guess::Matrix, YF_path::Matrix, 
                                 KF_path::Matrix, p_F_int, regions::DataFrame, T::Int, interp1, g::Float64, r_path::Adjoint{Float64, Vector{Float64}}, 
                                 fusage_total_path::Matrix, p_F_update::Matrix)
     # compute electricity and fossil fuel usage in industry and electricity
@@ -441,10 +443,10 @@ function update_fossil_market!(diffpF::Float64, fossilsales_path::Matrix, p_F_pa
 
 end
 
-function solve_transition_eq(R_LR::Float64, GsupplyCurves::StructGsupply, decayp::Float64, T::Int, params, sseq::NamedTuple, KR_init_S::Matrix, 
+function solve_transition_eq(R_LR::Float64, GsupplyCurves::StructGsupply, decayp::Float64, T::Int, params::StructParams, sseq::NamedTuple, KR_init_S::Matrix, 
     KR_init_W::Matrix, mrkteq::NamedTuple, Initialprod::Int, RWParams, curtailmentswitch, 
     p_KR_bar_init::Matrix, laboralloc_init::Matrix, regionParams::StructRWParams, majorregions::DataFrame, Linecounts::DataFrame, linconscount::Int, 
-    kappa::Int, regions::DataFrame, Transiter::Int, st::Matrix, hoursofstorage::Int, pB_shifter::Float64, g::Float64, 
+    kappa::Float64, regions::DataFrame, Transiter::Int, st::Matrix, hoursofstorage::Int, pB_shifter::Float64, g::Float64, 
     wage_init::Vector, p_KR_init_S::Float64, p_KR_init_W::Float64, p_F_int::Float64, interp3)
     # ---------------------------------------------------------------------------- #
     #                                Initialization                                #

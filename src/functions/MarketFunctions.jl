@@ -1,11 +1,13 @@
 module MarketFunctions
-export calc_subsidyUS, calc_expenditure!, elec_fuel_expenditure!, open_mat_var!,
-        market_setup!, second_loop, solve_KP_init!, optimize_region!, optimize_region_test!, solve_initial_equilibrium
+
+export StructMarketEq, solve_initial_equilibrium
+
 using DataFrames, Statistics, MAT
 using ..RegionModel, ..MarketEquilibrium
 using JuMP, Ipopt
 
 import ..DataLoadsFunc: StructRWParams
+import DrawGammas: StructParams
 
 function calc_subsidyUS(p_E_init::Vector, regions::DataFrame, majorregions::DataFrame)
     p_E_weighted = Vector{Float64}(undef, 2531)
@@ -16,13 +18,13 @@ function calc_subsidyUS(p_E_init::Vector, regions::DataFrame, majorregions::Data
     #p_E_weighted_rel = p_E_weighted ./ p_E_weighted[1]
 
     # set subsidy amount for transition
-    subsidy_US=p_E_weighted[1]*0.15
+    subsidy_US = p_E_weighted[1]*0.15
     return subsidy_US
 end
 
 function calc_expenditure!(e2_init::Matrix, fusage_ind_init::Vector, 
     fusage_power_init::Vector, Expenditure_init::Vector,
-    fossilsales::Matrix, laboralloc::Matrix, D_init::Vector, params, p_E_init::Vector, p_F::Float64, 
+    fossilsales::Matrix, laboralloc::Matrix, D_init::Vector, params::StructParams, p_E_init::Vector, p_F::Float64, 
     YF_init::Vector, regionParams::StructRWParams, wage_init::Vector, rP_init::Vector, KP_init::Vector, YE_init::Vector,
     regions::DataFrame, PI_init::Vector)
     # compute electricty and fossil fuel usage in industry and electricity
@@ -43,7 +45,7 @@ function calc_expenditure!(e2_init::Matrix, fusage_ind_init::Vector,
     #fossshare_j = fossilsales ./ Expenditure_init
 end
 
-function elec_fuel_expenditure!(laboralloc::Matrix, D_init::Vector, params, p_E_init::Vector, p_F::Float64, 
+function elec_fuel_expenditure!(laboralloc::Matrix, D_init::Vector, params::StructParams, p_E_init::Vector, p_F::Float64, 
     YF_init::Vector, regionParams::StructRWParams, wage_init::Vector, rP_init::Vector, KP_init::Vector, fossilsales::Matrix, 
     YE_init::Vector, regions::DataFrame, PI_init::Vector)
     e2_init = Matrix{Float64}(undef, 2531, 10)
@@ -180,7 +182,7 @@ end
 
 function optimize_region!(result_price_init::Vector, result_Dout_init::Matrix{Matrix{Float64}}, result_Yout_init::Matrix{Matrix{Float64}}, Lossfac_init::Matrix,
 	majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params,
-	wage_init::Vector, rP_init::Vector, linconscount::Int, pg_init_s::Matrix, pE_market_init::Vector, kappa::Int,
+	wage_init::Vector, rP_init::Vector, linconscount::Int, pg_init_s::Matrix, pE_market_init::Vector, kappa::Float64,
 	p_F::Float64, regionParams::StructRWParams, KR_init_S::Matrix, KR_init_W::Matrix)
 
     n_regions = params.N - 1
@@ -262,8 +264,8 @@ function optimize_region!(result_price_init::Vector, result_Dout_init::Matrix{Ma
 end
 
 function optimize_region_test!(result_price_init::Vector, result_Dout_init::Matrix{Matrix{Float64}}, result_Yout_init::Matrix{Matrix{Float64}}, Lossfac_init::Matrix,
-	majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params,
-	wage_init::Vector, rP_init::Vector, linconscount::Int, pg_init_s::Matrix, pE_market_init::Vector, kappa::Int,
+	majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params::StructParams,
+	wage_init::Vector, rP_init::Vector, linconscount::Int, pg_init_s::Matrix, pE_market_init::Vector, kappa::Float64,
 	p_F::Float64, regionParams::StructRWParams, KR_init_S::Matrix, KR_init_W::Matrix, power2::Float64)
 
 	Threads.@threads :static for kk in 1:(params.N - 1)
@@ -288,9 +290,9 @@ function optimize_region_test!(result_price_init::Vector, result_Dout_init::Matr
 end
 
 
-function second_loop(kk::Int, majorregions::DataFrame, laboralloc::Matrix, Lsector::Matrix, params, 
+function second_loop(kk::Int, majorregions::DataFrame, laboralloc::Matrix, Lsector::Matrix, params::StructParams, 
             wage_init::Vector, rP_init::Vector, result_Pout_init::Matrix, 
-            pg_init_s::Matrix, pE_market_init::Vector, kappa::Int, 
+            pg_init_s::Matrix, pE_market_init::Vector, kappa::Float64, 
             regionParams::StructRWParams, KR_init_S::Matrix, KR_init_W::Matrix, p_F::Float64)
 
     YFmax = Vector{Float64}(undef, 332)
@@ -349,7 +351,7 @@ function second_loop(kk::Int, majorregions::DataFrame, laboralloc::Matrix, Lsect
 
 end
 
-function solve_KP_init!(KP_init::Vector, Lsector::Matrix, params, wage_init::Vector, rP_init::Vector)
+function solve_KP_init!(KP_init::Vector, Lsector::Matrix, params::StructParams, wage_init::Vector, rP_init::Vector)
     # get capital vec
     Ksector = Lsector .* 
             (params.Vs[:, 4]' .* ones(params.J, 1)) ./
@@ -359,9 +361,42 @@ function solve_KP_init!(KP_init::Vector, Lsector::Matrix, params, wage_init::Vec
     return KP_init
 end
 
-function solve_initial_equilibrium(params, wage_init::Union{Matrix, Vector{Float64}}, majorregions::DataFrame,
+
+mutable struct StructMarketEq
+    Lsector::Matrix{Float64}
+    result_price_init::Vector{Any}  # Likely Vector{Vector{Float64}} or Vector{Matrix{Float64}} depending on your data structure
+    pg_init_s::Matrix{Float64}
+    pE_market_init::Vector{Float64}
+    Lossfac_init::Matrix{Float64}
+    D_init::Vector{Float64}
+    YE_init::Vector{Float64}
+    diffend::Float64
+    w_guess::Matrix{Float64}
+    p_E_init::Vector{Float64}
+    result_Pout_init::Array{Matrix{Float64}, 2}
+    laboralloc::Matrix{Float64}
+    PC_guess_init::Matrix{Float64}
+    result_Dout_init::Array{Matrix{Float64}, 2}
+    result_Yout_init::Array{Matrix{Float64}, 2}
+    p_F_path_guess::Matrix{Float64}
+    wedge::Matrix{Float64}
+    priceshifterupdate::Matrix{Float64}
+    fossilsales::Matrix{Float64}
+    P_out::Vector{Float64}
+    Expenditure_init::Vector{Float64}
+    rP_init::Vector{Float64}
+    PI_init::Vector{Float64}
+    KP_init::Vector{Float64}
+    W_Real::Vector{Float64}
+    PC_init::Vector{Float64}
+    YF_init::Vector{Float64}
+    p_F::Float64
+    subsidy_US::Float64
+end
+
+function solve_initial_equilibrium(params::StructParams, wage_init::Vector{Float64}, majorregions::DataFrame,
     regionParams::StructRWParams, KR_init_S::Matrix{Float64}, KR_init_W::Matrix{Float64}, R_LR::Float64, sectoralempshares::Matrix{Union{Float64, Missing}},
-    Linecounts::DataFrame, kappa::Int, regions::DataFrame, linconscount::Int, updw_w::Float64, upw_z::Float64, RWParams::StructRWParams, G::String)
+    Linecounts::DataFrame, kappa::Float64, regions::DataFrame, linconscount::Int, updw_w::Float64, upw_z::Float64, RWParams::StructRWParams, G::String)
     
     # allocations for variables
     sizes = [727, 755, 30, 53, 13, 15, 46, 11, 26, 78, 125, 320, 332]
@@ -500,7 +535,6 @@ function solve_initial_equilibrium(params, wage_init::Union{Matrix, Vector{Float
         w_guess
         fossilsales
 
-        println("calculating wage updates")
         w_update, W_Real, Incomefactor, PC_init, Xjdashs = wage_update_ms(w_guess,p_E_init,p_E_init, p_F, D_init, YE_init,rP_init,KP_init,PI_init, fossilsales, params)
 
         global W_Real
@@ -541,35 +575,37 @@ function solve_initial_equilibrium(params, wage_init::Union{Matrix, Vector{Float
         println("diffend = ", diffend)
     end
 
-    return (Lsector = Lsector, 
-            result_price_init = result_price_init, 
-            pg_init_s = pg_init_s, 
-            pE_market_init = pE_market_init, 
-            Lossfac_init = Lossfac_init, 
-            D_init = D_init, 
-            YE_init = YE_init, 
-            diffend = diffend, 
-            w_guess = w_guess, 
-            p_E_init = p_E_init, 
-            result_Pout_init = result_Pout_init, 
-            laboralloc = laboralloc, 
-            PC_guess_init = PC_guess_init, 
-            result_Dout_init = result_Dout_init, 
-            result_Yout_init = result_Yout_init, 
-            p_F_path_guess = p_F_path_guess, 
-            wedge = wedge, 
-            priceshifterupdate = priceshifterupdate, 
-            fossilsales = fossilsales, 
-            P_out = P_out, 
-            Expenditure_init = Expenditure_init,
-            rP_init = rP_init, 
-            PI_init = PI_init, 
-            KP_init = KP_init, 
-            W_Real = W_Real, 
-            PC_init = PC_init, 
-            YF_init = YF_init, 
-            p_F = p_F,
-            subsidy_US = subsidy_US)
+    return StructMarketEq(
+        Lsector,
+        result_price_init,
+        pg_init_s,
+        pE_market_init,
+        Lossfac_init,
+        D_init,
+        YE_init,
+        diffend,
+        w_guess,
+        p_E_init,
+        result_Pout_init,
+        laboralloc,
+        PC_guess_init,
+        result_Dout_init,
+        result_Yout_init,
+        p_F_path_guess,
+        wedge,
+        priceshifterupdate,
+        fossilsales,
+        P_out,
+        Expenditure_init,
+        rP_init,
+        PI_init,
+        KP_init,
+        W_Real,
+        PC_init,
+        YF_init,
+        p_F,
+        subsidy_US
+    )
 end
 
 

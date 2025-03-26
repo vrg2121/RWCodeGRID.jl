@@ -9,16 +9,17 @@ import Random: Random
 import DataFrames: DataFrame
 import SparseArrays: sparse
 import ..ModelConfiguration: ModelConfig
+import DrawGammas: StructAllParams
 
 export solve_transition_exog
 
 """
-    solve_transition(P::NamedTuple, DL::NamedTuple, M::NamedTuple, S::NamedTuple, Subsidy::Int, config::ModelConfig, G::String)
+    solve_transition(P::StructAllParams, DL::NamedTuple, M::NamedTuple, S::NamedTuple, Subsidy::Int, config::ModelConfig, G::String)
 
 Model of the renewable energy transition up to 2040.
 
 ## Inputs
-- `P::NamedTuple` -- NamedTuple of parameters. Output of `P = setup_parameters(D, G)`
+- `P::StructAllParams` -- Struct of parameters. Created in local package DrawGammas
 - `D::NamedTuple` -- NamedTuple of model data. Output of `DL = load_data(P, D)`
 - `M::NamedTuple` -- NamedTuple of market equilibrium. Output of `M = solve_market(P, DL, config, G)`
 - `S::NamedTuple` -- NamedTuple of steady state equilibrium. Output of `S = solve_steadystate(P, DL, M, config, Guesses)`
@@ -33,7 +34,7 @@ Named tuple containing path of renewable energy transition with exogenous tech a
 ## Notes
 Calculated with some variations when RunTransition==1, RunBatteries==1, RunExog==1, RunCurtailment==1. Not calculated when RunImprovement==1.
 """
-function solve_transition_exog(P::NamedTuple, DL::NamedTuple, M::NamedTuple, S::NamedTuple, config::ModelConfig, exogindex::Int64)
+function solve_transition_exog(P::StructAllParams, DL::NamedTuple, M::NamedTuple, S::NamedTuple, config::ModelConfig, exogindex::Int64)
 
     # set st 
     st = zeros(P.params.J, P.T + 1)
