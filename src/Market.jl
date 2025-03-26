@@ -11,7 +11,7 @@ using ..MarketEquilibrium
 using ..RegionModel
 import ..ModelConfiguration: ModelConfig
 import DrawGammas: StructAllParams, StructParams
-import ..DataLoads: StructAllData, load_data
+import ..DataLoads: StructAllData
 
 # load packages
 using JuMP, Ipopt

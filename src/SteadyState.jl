@@ -9,6 +9,8 @@ import Interpolations: interpolate, Gridded, Linear
 # import parameters, data and variables
 import ..ModelConfiguration: ModelConfig
 import DrawGammas: StructAllParams
+import ..DataLoads: StructAllData
+import ..Market: StructMarketOutput
 import ..SteadyStateFunctions: StructPowerOutput
 
 # export variables
@@ -64,24 +66,24 @@ end
 
 
 """
-    solve_steadystate(P::StructAllParams, D::NamedTuple, M::NamedTuple, config::ModelConfig, G::String)
+    solve_steadystate(P::StructAllParams, D::StructAllData, M::StructMarketOutput, config::ModelConfig, G::String)
 
 Solve the steady-state equilibrium for wind and solar in the energy grid.
 
 # Arguments
 - `P::StructAllParams`: Struct of parameters, output of `P = setup_parameters(D, G)`
-- `D::NamedTuple`: NamedTuple of model data, output of `DL = load_data(P, D)`
-- `M::NamedTuple`: NamedTuple of market equilibrium, output of `M = solve_market(P, DL, config, G)`
+- `D::StructAllData`: Struct of model data, output of `DL = load_data(P, D)`
+- `M::StructMarketOutput`: Struct of market equilibrium, output of `M = solve_market(P, DL, config, G)`
 - `config::ModelConfig`: User defined model configurations.
 - `G::String`: Path to the Guesses folder, e.g., `G = "path/to/Guesses"`
 
 # Returns
-NamedTuple containing steady-state levels of GDP, wages, labor, capital, electricity, fossil fuels, etc.
+Struct containing steady-state levels of GDP, wages, labor, capital, electricity, fossil fuels, etc.
 
 # Notes
 Updates some guesses when hours of storage = 0.
 """
-function solve_steadystate(P::StructAllParams, D::NamedTuple, M::NamedTuple, config::ModelConfig, G::String)
+function solve_steadystate(P::StructAllParams, D::StructAllData, M::StructMarketOutput, config::ModelConfig, G::String)
 
     pB_shifter = P.pB_shifter
     if config.RunBatteries == 1

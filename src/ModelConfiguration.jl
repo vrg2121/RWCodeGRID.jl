@@ -3,7 +3,7 @@ module ModelConfiguration
 
 export ModelConfig
 
-struct ModelConfig
+mutable struct ModelConfig
     RunTransition::Int64
     RunBatteries::Int64
     RunExog::Int64

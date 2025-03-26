@@ -4,13 +4,13 @@ import DataFrames: DataFrame
 import MAT: matopen
 import Statistics: mean
 import ..DataLoadsFunc: StructGsupply, StructRWParams
+import ..MarketFunctions: StructMarketEq
 using JuMP, Ipopt
 using ..RegionModel, ..MarketEquilibrium
 
 import DrawGammas: StructParams
 import ..ModelConfiguration: ModelConfig
-export ss_second_loop, grad_f, new_obj2, new_grad2, ss_load_mat, ss_update_params!, 
-       new_obj_f, new_grad_f, set_battery, update_battery, ss_optimize_region!, solve_power_output, ss_optimize_region_imp!
+export solve_power_output
 
 export StructPowerOutput
 
@@ -251,7 +251,7 @@ end
 
 function solve_power_output(RWParams::StructRWParams, params::StructParams, RunBatteries::Int, RunCurtailment::Int,
     Initialprod::Int, R_LR::Float64, majorregions::DataFrame, Linecounts::DataFrame, linconscount::Int,
-    regionParams::StructRWParams, curtailmentswitch::Int, interp3, T::Int, kappa::Float64, mrkteq::NamedTuple, config::ModelConfig, 
+    regionParams::StructRWParams, curtailmentswitch::Int, interp3, T::Int, kappa::Float64, mrkteq::StructMarketEq, config::ModelConfig, 
     pB_shifter::Float64, G::String)
 
     laboralloc_LR, KR_LR_S, KR_LR_W, p_E_LR, w_LR, result_Dout_LR, result_Yout_LR, PC_guess_LR = ss_load_mat(G)
