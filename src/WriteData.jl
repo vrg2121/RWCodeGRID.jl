@@ -4,20 +4,24 @@ module WriteData
 import DelimitedFiles: writedlm
 import ..ModelConfiguration: ModelConfig
 import DrawGammas: StructAllParams
+import ..DataLoads: StructAllData
+import ..Market: StructMarketOutput
+import ..SteadyState: StructSteadyState
+import ..Transition: StructTransOutput
 
 export writedata
 
 """
-    writedata(P::StructAllParams, M::NamedTuple, S::NamedTuple, T::NamedTuple, config::ModelConfig, R::String)
+    writedata(P::StructAllParams, M::StructMarketOutput, S::StructSteadyState, T::StructTransOutput, config::ModelConfig, R::String)
 
 Writes data outputs to .csv files for analysis. All outputs are in the Results folder
 
 ## Inputs
 - `P::StructAllParams` -- Struct of parameters. Created in local package DrawGammas
-- `D::NamedTuple` -- NamedTuple of model data. Output of `DL = load_data(P, D)`
-- `M::NamedTuple` -- NamedTuple of market equilibrium. Output of `M = solve_market(P, DL, config, G)`
-- `S::NamedTuple` -- NamedTuple of steady state equilibrium. Output of `S = solve_steadystate(P, DL, M, config, Guesses)`
-- `T::NamedTuple` -- NamedTuple of transition outputs. Output of `T = solve_transition(P, DL, M, S, Subsidy, config, Guesses)`
+- `D::StructAllData` -- Struct of model data. Output of `DL = load_data(P, D)`
+- `M::StructMarketOutput` -- Struct of market equilibrium. Output of `M = solve_market(P, DL, config, G)`
+- `S::StructSteadyState` -- Struct of steady state equilibrium. Output of `S = solve_steadystate(P, DL, M, config, Guesses)`
+- `T::StructTransOutput` -- Struct of transition outputs. Output of `T = solve_transition(P, DL, M, S, Subsidy, config, Guesses)`
 - `config::ModelConfig` -- struct of user defined model configurations. `config = ModelConfig()`
 - `R::String` -- path to Results folder. `R = "path/to/Results"`
 
@@ -28,7 +32,8 @@ Model results (with and without subsidy) for capital and battery price falls, re
 ## Notes
 This function writes data only when RunTransition==1.
 """
-function writedata(P::StructAllParams, DL::NamedTuple, M::NamedTuple, S::NamedTuple, T::NamedTuple, Subsidy::Int, config::ModelConfig, R::String)
+
+function writedata(P::StructAllParams, DL::StructAllData, M::StructMarketOutput, S::StructSteadyState, T::StructTransOutput, Subsidy::Int, config::ModelConfig, R::String)
     # initialize data
     yearindex_cap = Vector{Int64}(undef, 20)
     yearindex_share = Vector{Int64}(undef, 30)

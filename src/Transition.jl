@@ -17,7 +17,20 @@ import ..ModelConfiguration: ModelConfig
 
 # import parameters, data and variables
 
-export solve_transition
+export solve_transition, StructTransOutput
+
+mutable struct StructTransOutput
+    transeq::StructTransEq
+    renewshare_path_region::Matrix{Float64}
+    renewshare_path_world::Matrix{Float64}
+    renewshareUS::Matrix{Float64}
+    welfare_wagechange_2040::Vector{Float64}
+    welfare_capitalchange_2040::Vector{Float64}
+    welfare_electricitychange_2040::Vector{Float64}
+    welfare_fossilchange_2040::Vector{Float64}
+    YUS_rel::Matrix{Float64}
+    st::Matrix{Float64}
+end
 
 """
     solve_transition(P::StructAllParams, DL::StructAllData, M::StructMarketOutput, S::StructSteadyState, Subsidy::Int, config::ModelConfig, G::String)
@@ -130,17 +143,17 @@ function solve_transition(P::StructAllParams, DL::StructAllData, M::StructMarket
         matwrite("$G/p_F_path_guess_saved.mat", Dict("p_F_path_guess" => p_F_path_guess))
     end
 
-    return (
-        transeq = transeq,
-        renewshare_path_region = renewshare_path_region,
-        renewshare_path_world = renewshare_path_world,
-        renewshareUS = renewshareUS,
-        welfare_wagechange_2040 = welfare_wagechange_2040,
-        welfare_capitalchange_2040 = welfare_capitalchange_2040,
-        welfare_electricitychange_2040 = welfare_electricitychange_2040,
-        welfare_fossilchange_2040 = welfare_fossilchange_2040,
-        YUS_rel = YUS_rel,
-        st = st
+    return StructTransOutput(
+        transeq,
+        renewshare_path_region,
+        renewshare_path_world,
+        renewshareUS,
+        welfare_wagechange_2040,
+        welfare_capitalchange_2040,
+        welfare_electricitychange_2040,
+        welfare_fossilchange_2040,
+        YUS_rel,
+        st
     )
 end
 

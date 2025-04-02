@@ -7,16 +7,16 @@ import Random: Random
 import SparseArrays: sparse
 import ..RegionModel: solve_model
 import ..DataLoadsFunc: StructGsupply, StructRWParams
-import DrawGammas: StructParams
+import DrawGammas: StructParams, StructAllParams
+import ..SteadyState: StructPowerOutput
 
 using Ipopt, JuMP
 
 using ..MarketEquilibrium
 
-export sectoral_allocations!, update_capital_price!, update_battery_prices!, transition_electricity_US_Europe!, transition_electricity_other_countries!,
-        transition_electricity_off_grid!, fill_paths!, smooth_prices!, update_fossil_market!, solve_transition_eq
+export solve_transition_eq, StructTransEq
 
-function sectoral_allocations!(Lsectorpath_guess::Array{Float64, 3}, laboralloc_path::Array{Float64, 3}, decayp::Float64, params::StructParams, laboralloc_init::Matrix, sseq::NamedTuple, T::Int)
+function sectoral_allocations!(Lsectorpath_guess::Array{Float64, 3}, laboralloc_path::Array{Float64, 3}, decayp::Float64, params::StructParams, laboralloc_init::Matrix, sseq::StructPowerOutput, T::Int)
     lpg = [exp(decayp * i) for j in 1:params.J, i in 0:T, k in 1:params.I]
     Lsectorpath_guess .= permutedims(lpg, [1, 3, 2])
     laboralloc_path .= sseq.laboralloc_LR .+ (laboralloc_init .- sseq.laboralloc_LR) .* Lsectorpath_guess
@@ -166,7 +166,7 @@ function transition_electricity_US_Europe!(result_price_path::Matrix, result_Dou
         tasks = Vector{Task}(undef, capT)
 
         for t in 1:capT
-            tasks[kk] = Threads.@spawn begin
+            tasks[t] = Threads.@spawn begin
                 l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid, p_F_in = data_set_up_transition(t, kk, majorregions, Linecounts, RWParams, laboralloc_path, Lsectorpath_guess, params,
                                                                                             w_path_guess, rP_path, pg_path_s, p_E_path_guess, kappa, regionParams, KF_path, p_F_path_guess, 
                                                                                             linconscount, KR_path_S, KR_path_W)
@@ -188,10 +188,10 @@ function transition_electricity_US_Europe!(result_price_path::Matrix, result_Dou
 
         for t in 1:capT
             result = fetch(tasks[t])
-            @views result_price_LR[kk, result.t] .= result.local_price
-            @views result_Dout_LR[kk, result.t] .= result.local_Dout
-            @views result_Yout_LR[kk, result.t] .= result.local_Yout
-            @views result_YFout_LR[kk, result.t] .= result.local_YFout
+            @views result_price_path[kk, result.t] .= result.local_price
+            @views result_Dout_path[kk, result.t] .= result.local_Dout
+            @views result_Yout_path[kk, result.t] .= result.local_Yout
+            @views result_YFout_path[kk, result.t] .= result.local_YFout
         end
         
         """Threads.@threads for t in 1:capT
@@ -211,19 +211,16 @@ function transition_electricity_US_Europe!(result_price_path::Matrix, result_Dou
     end
 end
 
-
 function transition_electricity_other_countries!(result_price_path::Matrix, result_Dout_path::Matrix, result_Yout_path::Matrix, result_YFout_path::Matrix, # modified variables
     majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc_path::Array,
     Lsectorpath_guess::Array, params::StructParams, w_path_guess::Matrix{Float64}, rP_path::Matrix{Float64},
     linconscount::Int, pg_path_s::Array, p_F_path_guess::Transpose, p_E_path_guess::Matrix{Float64},
     kappa, KR_path_S::Matrix{Float64}, KR_path_W::Matrix{Float64}, KF_path::Matrix{Float64}, capT::Int, regionParams::StructRWParams)
 
-
-
     for kk=3:(params.N - 1)
-        
+        tasks = Vector{Task}(undef, capT)        
         for t in 1:capT
-            tasks[kk] = Threads.@spawn begin
+            tasks[t] = Threads.@spawn begin
                 l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid, p_F_in = data_set_up_transition(t, kk, majorregions, Linecounts, RWParams, laboralloc_path, Lsectorpath_guess, params,
                             w_path_guess, rP_path, pg_path_s, p_E_path_guess, kappa, regionParams, KF_path, p_F_path_guess, 
                             linconscount, KR_path_S, KR_path_W)
@@ -244,10 +241,10 @@ function transition_electricity_other_countries!(result_price_path::Matrix, resu
     
         for t in 1:capT
             result = fetch(tasks[t])
-            @views result_price_LR[kk, result.t] .= result.local_price
-            @views result_Dout_LR[kk, result.t] .= result.local_Dout
-            @views result_Yout_LR[kk, result.t] .= result.local_Yout
-            @views result_YFout_LR[kk, result.t] .= result.local_YFout
+            @views result_price_path[kk, result.t] .= result.local_price
+            @views result_Dout_path[kk, result.t] .= result.local_Dout
+            @views result_Yout_path[kk, result.t] .= result.local_Yout
+            @views result_YFout_path[kk, result.t] .= result.local_YFout
         end
         
         
@@ -314,8 +311,7 @@ function transition_electricity_off_grid!(result_price_path::Matrix, result_Dout
         # define bounds
         YFmax = KF_path[ind, t]
 
-        tasks = Vector[Task](undef, n)
-
+        tasks = Vector{Task}(undef, n)
         for jj in 1:n 
             tasks[jj] = Threads.@spawn begin
                 # solve market equilibrium
@@ -332,7 +328,6 @@ function transition_electricity_off_grid!(result_price_path::Matrix, result_Dout
                 @objective(model, Min, obj2(x, power[jj], shifter[jj], KFshifter[jj], KRshifter[jj], p_F_in[1], params))
                 optimize!(model)
 
-
                 P_out = value.(x)
                 price = Price_Solve(P_out, shifter[jj], 1, params)[1]
 
@@ -344,12 +339,10 @@ function transition_electricity_off_grid!(result_price_path::Matrix, result_Dout
         for jj in 1:n
             result = fetch(tasks[jj])
             result_Dout_path[kk, t][jj] = result.P_out[1]
-            #local P_out = solve_model2(jj, x, LB, UB, guess, params, power, shifter, KFshifter, KRshifter, p_F_in)
             result_Yout_path[kk, t][jj] = result.P_out[2]
             result_YFout_path[kk, t][jj] = result.P_out[2] - KRshifter[jj]
             result_price_path[kk, t][jj] = result.price[1]
             result_price_path[kk, t] = clamp.(result_price_path[kk, t], 0.001, 1)
-            jj
         end
     end
 end
@@ -357,38 +350,36 @@ end
 function fill_paths!(p_E_path_guess::Matrix, D_path::Matrix, Y_path::Matrix, YF_path::Matrix, PI_path::Matrix, 
                     params::StructParams, majorregions::DataFrame, result_price_path::Matrix, result_Dout_path::Matrix, 
                     result_Yout_path::Matrix, result_YFout_path::Matrix, capT::Int)
-
-    # Did not parallelize because creating intermediate data structures could slow memory
     
     for t in 1:capT
-        for kk = 1:params.N
-            local ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
-            if kk > params.N
-                p_E_path_guess[ind, t] .= result_price_path[kk, t]
-                D_path[ind, t] .= result_Dout_path[kk, t]
-                Y_path[ind, t] .= result_Yout_path[kk, t]
-                YF_path[ind, t] .= result_YFout_path[kk, t]
-                PI_path[ind, t] .= sum(p_E_path_guess[ind, t] .*
-                                    (D_path[ind, t] .- Y_path[ind, t])) .*
-                                    params.L[ind, 1] ./ 
-                                    sum(params.L[ind, 1])            
-            else
-                p_E_path_guess[ind, t] .= vec(result_price_path[kk, t])
-                D_path[ind, t] .= vec(result_Dout_path[kk, t])
-                Y_path[ind, t] .= vec(result_Yout_path[kk, t])
-                YF_path[ind, t] .= vec(result_YFout_path[kk, t])
-                PI_path[ind, t] .= sum(p_E_path_guess[ind, t] .*
-                                    (D_path[ind, t] .- Y_path[ind, t])) .*
-                                    params.L[ind, 1] ./ 
-                                    sum(params.L[ind, 1])
-            end
+        for kk = 1:(params.N - 1)
+            ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
+            p_E_path_guess[ind, t] .= result_price_path[kk, t]
+            D_path[ind, t] .= result_Dout_path[kk, t]
+            Y_path[ind, t] .= result_Yout_path[kk, t]
+            YF_path[ind, t] .= result_YFout_path[kk, t]
+            PI_path[ind, t] .= sum(p_E_path_guess[ind, t] .*
+                                (D_path[ind, t] .- Y_path[ind, t])) .*
+                                params.L[ind, 1] ./ sum(params.L[ind, 1])
+        end   
+
+        for kk = params.N
+            ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
+            p_E_path_guess[ind, t] .= vec(result_price_path[kk, t])
+            D_path[ind, t] .= vec(result_Dout_path[kk, t])
+            Y_path[ind, t] .= vec(result_Yout_path[kk, t])
+            YF_path[ind, t] .= vec(result_YFout_path[kk, t])
+            PI_path[ind, t] .= sum(p_E_path_guess[ind, t] .*
+                                (D_path[ind, t] .- Y_path[ind, t])) .*
+                                params.L[ind, 1] ./ sum(params.L[ind, 1])
         end
+        
     end
 end
 
 function smooth_prices!(p_E_path_guess::Matrix{Float64},
      D_path::Matrix{Float64}, Y_path::Matrix{Float64}, YF_path::Matrix{Float64},
-    sseq::NamedTuple, expo3::Vector, expo4::Vector, capT::Int, T::Int)
+    sseq::StructPowerOutput, expo3::Vector, expo4::Vector, capT::Int, T::Int)
     for kk in capT+1:T
         jj = kk - capT
         p_E_path_guess[:, kk] .= sseq.p_E_LR .+ ((p_E_path_guess[:, kk-1] .- sseq.p_E_LR) .* expo3[jj])
@@ -440,6 +431,29 @@ function update_fossil_market!(diffpF::Float64, fossilsales_path::Matrix, p_F_pa
     diffpF = maximum(abs.(p_F_update[1:100] .- p_F_path_guess[1:100]) ./ p_F_path_guess[1:100])
     p_F_path_guess .= 0.1 .* p_F_update .+ (1 - 0.1) .* p_F_path_guess
 
+end
+
+mutable struct StructTransEq
+    difftrans::Float64
+    ll::Int
+    r_path::Adjoint{Float64, Vector{Float64}}
+    KR_path::Matrix{Float64}
+    p_KR_bar_path::Matrix{Float64}
+    KF_path::Matrix{Float64}
+    PC_path_guess::Matrix{Float64}
+    fossilsales_path::Matrix{Float64}
+    w_path_guess::Matrix{Float64}
+    YF_path::Matrix{Float64}
+    YR_path::Matrix{Float64}
+    Y_path::Matrix{Float64}
+    p_KR_path_W::Matrix{Float64}
+    p_KR_path_S::Matrix{Float64}
+    p_KR_path_guess_W::Matrix{Float64}
+    p_F_path_guess::Transpose{Float64, Vector{Float64}}
+    KP_path_guess::Matrix{Float64}
+    p_E_path_guess::Matrix{Float64}
+    fusage_total_path::Matrix{Float64}
+    p_B_path_guess::Matrix{Float64}
 end
 
 function solve_transition_eq(R_LR::Float64, GsupplyCurves::StructGsupply, decayp::Float64, T::Int, params::StructParams, sseq::NamedTuple, KR_init_S::Matrix, 
@@ -631,8 +645,7 @@ function solve_transition_eq(R_LR::Float64, GsupplyCurves::StructGsupply, decayp
 
     while difftrans>10^(-2) && ll<=Transiter
         update_capital_price!(p_KR_path_S, p_KR_path_W, p_KR_path_guess_S, p_KR_path_guess_W,
-                        KR_path_S, KR_path_W, params, Initialprod, KR_init_S,
-                        KR_init_W)
+                        KR_path_S, KR_path_W, params, Initialprod, KR_init_S, KR_init_W)
         # updates p_KR_path_S, p_KR_path_W, p_KR_path_guess_S, p_KR_path_guess_W
 
 
@@ -676,45 +689,62 @@ function solve_transition_eq(R_LR::Float64, GsupplyCurves::StructGsupply, decayp
 
         # other countries
         transition_electricity_other_countries!(result_price_path, result_Dout_path, result_Yout_path, result_YFout_path,
-                                    majorregions, Linecounts, RWParams, laboralloc_path,
-                                    Lsectorpath_guess, params, w_path_guess, rP_path,
-                                    linconscount, pg_path_s, p_F_path_guess, p_E_path_guess,
-                                    kappa, KR_path_S, KR_path_W, KF_path, capT, regionParams)   
+                            majorregions, Linecounts, RWParams, laboralloc_path,
+                            Lsectorpath_guess, params, w_path_guess, rP_path,
+                            linconscount, pg_path_s, p_F_path_guess, p_E_path_guess,
+                            kappa, KR_path_S, KR_path_W, KF_path, capT, regionParams)   
         # updates result_price_path, result_Dout_path, result_Yout_path, result_YFout_path
 
         # places that are off the grid
         transition_electricity_off_grid!(result_price_path, result_Dout_path, result_Yout_path, result_YFout_path, # modified variables
-        majorregions, laboralloc_path,
-        Y_path, Lsectorpath_guess, params, w_path_guess, rP_path,
-        pg_path_s, p_F_path_guess, p_E_path_guess,
-        kappa, KR_path_S, KR_path_W, KF_path, capT, regionParams, D_path)
+                            majorregions, laboralloc_path, Y_path, Lsectorpath_guess, 
+                            params, w_path_guess, rP_path, pg_path_s, p_F_path_guess, p_E_path_guess,
+                            kappa, KR_path_S, KR_path_W, KF_path, capT, regionParams, D_path)
 
         fill_paths!(p_E_path_guess, D_path, Y_path, YF_path, PI_path, 
-        params, majorregions, result_price_path, result_Dout_path, result_Yout_path, result_YFout_path, capT)
+            params, majorregions, result_price_path, result_Dout_path, result_Yout_path, result_YFout_path, capT)
         # updates p_E_path_guess, D_path, Y_path, YF_path, PI_path
 
         # out from cap T set prices based on smoothing
-        smooth_prices!(p_E_path_guess, D_path, Y_path, YF_path,
-        sseq, expo3, expo4, capT, T)
+        smooth_prices!(p_E_path_guess, D_path, Y_path, YF_path, sseq, expo3, expo4, capT, T)
         # updates p_E_path_guess, D_path, Y_path, YF_path
 
         # ---------------------------------------------------------------------------- #
         #                        UPDATE TRANSITION LABOUR MARKET                       #
         # ---------------------------------------------------------------------------- #
 
+        tasks = Vector{Task}(undef, capT)
         for i in 1:capT
-            # get capital vec
-            Ksector = sseq.Lsector .* (params.Vs[:, 4]' .* ones(params.J, 1)) ./
-                            (params.Vs[:, 1]' .* ones(params.J, 1)) .* (w_path_guess[:, i] ./ rP_path[:, i])
-            KP_path_guess[:, i] = sum(Ksector, dims=2)
-            w_update[:, i], w_real_path[:, i], Incomefactor, PC[:, i]= wage_update_ms(w_path_guess[:, i], p_E_path_guess[:, i], p_E_path_guess[:, i], 
-                                                                            p_F_path_guess[:, i], D_path[:, i], Y_path[:, i],
-                                                                            rP_path[:, i], KP_path_guess[:, i], PI_path[:, i], 1, params)
-            #relexp = Xjdashs ./ (Xjdashs[:, 1] .* ones(1, params.I))
-            @views w_path_guess[:, i] .= 0.5 * w_update[:, i] + (1- 0.5) * w_path_guess[:, i]
-            @views Lsectorpath_guess[:, :, i] .= Lsectorpath_guess[:, :, i] ./ sum(Lsectorpath_guess[:,:,i], dims = 2) .* params.L
+            tasks[i] = Threads.@spawn begin
+                # get capital vec 
+                Ksector = sseq.Lsector .* (params.Vs[:, 4]' .* ones(params.J, 1)) ./
+                                (params.Vs[:, 1]' .* ones(params.J, 1)) .* (w_path_guess[:, i] ./ rP_path[:, i])
+        
+                KPpg = sum(Ksector, dims=2)
+
+                wup, wrp, incomefactor, pc = wage_update_ms(w_path_guess[:, i], p_E_path_guess[:, i], p_E_path_guess[:, i], 
+                                                                                p_F_path_guess[:, i], D_path[:, i], Y_path[:, i],
+                                                                                rP_path[:, i], KP_path_guess[:, i], PI_path[:, i], 1, params)
+                
+                wpg = 0.5 * wup + (1- 0.5) * w_path_guess[:, i]
+                Lspg = Lsectorpath_guess[:, :, i] ./ sum(Lsectorpath_guess[:,:,i], dims = 2) .* params.L
+                return (KPpg = KPpg, wup = wup, wrp = wrp, pc, wpg = wpg, Lspg = Lspg)
+            end
+        end
+        for i in 1:capT
+            result = fetch(tasks[i])
+            KP_path_guess[:, i] .= result.KPpg
+            w_update[:, i] .= result.wup
+            w_real_path[:, i] .= result.wrp
+            PC[:, i] .= result.pc
+            w_path_guess[:, i] .= result.wpg
+            Lsectorpath_guess[:, :, i] .= result.Lspg 
         end
 
+        for kk in capT+1:T+1
+            jj = kk - capT
+            KP_path_guess[:, kk] .= sseq.KP_LR .+ ((KP_path_guess[:, kk-1] .- sseq.KP_LR) .* expo4[jj])
+        end
 
         # ---------------------------------------------------------------------------- #
         #                             UPDATE FOSSIL MARKET                             #
@@ -779,6 +809,7 @@ function solve_transition_eq(R_LR::Float64, GsupplyCurves::StructGsupply, decayp
         curtailmentfactor_path_S[ind, :] .= renewshare_path[ind, :] .* SShare_region_path[ind, :]
         curtailmentfactor_path_W[ind, :] .= renewshare_path[ind, :] .* (1 .- SShare_region_path[ind, :])
         curtailmentfactor_path[ind, :] .= interp3.(curtailmentfactor_path_W[ind, :], curtailmentfactor_path_S[ind, :], hoursofstorage_path[ind, :])
+        
 
         # if market price is above free entry price, increase renewable capital
         # decrease otherwise
@@ -824,30 +855,29 @@ function solve_transition_eq(R_LR::Float64, GsupplyCurves::StructGsupply, decayp
 
     end
 
-    return (difftrans = difftrans, 
-        ll = ll, 
-        r_path = r_path, 
-        KR_path = KR_path, 
-        p_KR_bar_path = p_KR_bar_path, 
-        KF_path = KF_path, 
-        PC_path_guess = PC_path_guess, 
-        fossilsales_path = fossilsales_path, 
-        w_path_guess = w_path_guess, 
-        YF_path = YF_path, 
-        YR_path = YR_path, 
-        Y_path = Y_path, 
-        p_KR_path_S = p_KR_path_S, 
-        p_KR_path_W = p_KR_path_W,
-        p_KR_path_guess_W = p_KR_path_guess_W, 
-        p_F_path_guess = p_F_path_guess, 
-        KP_path_guess = KP_path_guess,
-        p_E_path_guess = p_E_path_guess,
-        fusage_total_path = fusage_total_path,
-        p_B_path_guess = p_B_path_guess
+    return StructTransEq(
+        difftrans, 
+        ll, 
+        r_path, 
+        KR_path, 
+        p_KR_bar_path, 
+        KF_path, 
+        PC_path_guess, 
+        fossilsales_path, 
+        w_path_guess, 
+        YF_path, 
+        YR_path, 
+        Y_path, 
+        p_KR_path_S, 
+        p_KR_path_W,
+        p_KR_path_guess_W, 
+        p_F_path_guess, 
+        KP_path_guess,
+        p_E_path_guess,
+        fusage_total_path,
+        p_B_path_guess
         )
 
 end
-
-
 
 end

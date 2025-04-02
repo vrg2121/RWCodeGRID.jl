@@ -57,10 +57,10 @@ mutable struct StructSteadyState
     GDP::Float64
     wr::Vector{Float64}
     wagechange::Matrix{Float64}
-    welfare_wagechange::Vector{Float64}
-    welfare_capitalchange::Vector{Float64}
-    welfare_electricitychange::Vector{Float64}
-    welfare_fossilchange::Vector{Float64}
+    welfare_wagechange::Matrix{Float64}
+    welfare_capitalchange::Matrix{Float64}
+    welfare_electricitychange::Matrix{Float64}
+    welfare_fossilchange::Matrix{Float64}
 end
 
 
