@@ -13,8 +13,8 @@ import DrawGammas: StructParams
 using ..MarketEquilibrium
 
 function data_set_up(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params::StructParams,
-    wage::Union{Matrix, Vector}, rP::Vector, pg_n_s::Matrix, pE::Union{Vector, Matrix}, kappa::Float64, regionParams, KF::Matrix, p_F::Union{Int64, Float64}, 
-    linconscount::Int, KR_S::Matrix, KR_W::Matrix, method::String)
+    wage::Union{Matrix, Vector}, rP::Union{Matrix, Vector}, pg_n_s::Matrix, pE::Union{Vector, Matrix}, kappa::Float64, regionParams::StructRWParams, KF::Matrix, p_F::Union{Int64, Float64}, 
+    linconscount::Int, KR_S::Union{Vector, Matrix}, KR_W::Union{Vector, Matrix}, method::String)
     local ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
     local n = majorregions.n[kk]
     "local l_ind = Linecounts.rowid2[kk]:Linecounts.rowid[kk]
@@ -61,8 +61,8 @@ function data_set_up(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RW
                     Kshifter .^ (params.Vs[:,4]'.* ones(n, 1))
     local shifter=shifter.*secalloc.^power
 
-    local @views KRshifter = @. regionParams.thetaS[ind] * KR_S[ind] + 
-                            regionParams.thetaW[ind] * KR_W[ind]
+    local @views KRshifter = @. (regionParams.thetaS[ind] * KR_S[ind]) + 
+                            (regionParams.thetaW[ind] * KR_W[ind])
     local @views KFshifter=KF[ind]
 
     if method == "market"

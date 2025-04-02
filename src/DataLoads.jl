@@ -11,6 +11,8 @@ import CSV: CSV
 import DataFrames: DataFrame
 import DrawGammas: StructAllParams
 
+export StructAllData, load_data
+
 mutable struct StructAllData
     RWParams::StructRWParams
     regionParams::StructRWParams

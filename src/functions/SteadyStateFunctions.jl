@@ -10,14 +10,14 @@ using ..RegionModel, ..MarketEquilibrium
 
 import DrawGammas: StructParams
 import ..ModelConfiguration: ModelConfig
-export solve_power_output
 
-export StructPowerOutput
+export solve_power_output, StructPowerOutput
+
 
 function ss_optimize_region!(result_price_LR::Vector, result_Dout_LR::Matrix, result_Yout_LR::Matrix, result_YFout_LR::Vector, Lossfac_LR::Matrix,
-        pg_LR_s::Matrix, majorregions::DataFrame, Linecounts::DataFrame, RWParams, laboralloc_LR::Matrix, Lsector::Matrix, params::StructParams, w_LR::Matrix, 
-        rP_LR::Vector, p_E_LR::Matrix, kappa::Float64, regionParams, KF_LR::Matrix, p_F_LR::Float64,
-        linconscount::Int, KR_LR_S::Matrix, KR_LR_W::Matrix, result_Yout_init::Matrix{Matrix{Float64}})
+        pg_LR_s::Matrix, majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc_LR::Matrix, Lsector::Matrix, params::StructParams, w_LR::Matrix, 
+        rP_LR::Matrix, p_E_LR::Matrix, kappa::Float64, regionParams::StructRWParams, KF_LR::Matrix, p_F_LR::Float64,
+        linconscount::Int, KR_LR_S::Matrix, KR_LR_W::Matrix)
 
     n_regions = params.N - 1
     tasks = Vector{Task}(undef, n_regions)
@@ -48,11 +48,11 @@ function ss_optimize_region!(result_price_LR::Vector, result_Dout_LR::Matrix, re
 
     for kk in 1:n_regions
         result = fetch(tasks[kk])
-        @views result_price_LR[result.kk] .= result.local_price
-        @views result_Dout_LR[result.kk] .= result.local_Dout
-        @views result_Yout_LR[result.kk] .= result.local_Yout
-        @views result_YFout_LR[result.kk] .= result.local_YFout
-        @views Lossfac_LR[1, result.kk] = result.local_Lossfac
+        result_price_LR[result.kk] .= result.local_price
+        result_Dout_LR[result.kk] .= result.local_Dout
+        result_Yout_LR[result.kk] .= result.local_Yout
+        result_YFout_LR[result.kk] .= result.local_YFout
+        Lossfac_LR[1, result.kk] = result.local_Lossfac
     end
 
     """Threads.@threads for kk in 1:(params.N - 1)
@@ -160,8 +160,51 @@ function ss_load_mat(G::String)
     return laboralloc_LR, KR_LR_S, KR_LR_W, p_E_LR, w_LR, result_Dout_LR, result_Yout_LR, PC_guess_LR
 end
 
+function ss_load_mat!(G::String, laboralloc_LR::Matrix{Float64},
+    KR_LR_S::Matrix{Float64},
+    KR_LR_W::Matrix{Float64},
+    p_E_LR::Matrix{Float64},
+    w_LR::Matrix{Float64},
+    result_Dout_LR::Matrix{Any},
+    result_Yout_LR::Matrix{Any},
+    PC_guess_LR::Matrix{Float64})
+
+    alr = matopen("$G/alloc_LR_guess.mat")
+    laboralloc_LR .= read(alr, "laboralloc_LR")
+    close(alr)
+
+    kls = matopen("$G/KR_LR_S_guess.mat")
+    KR_LR_S .= read(kls, "KR_LR_S")
+    close(kls)
+
+    klw = matopen("$G/KR_LR_W_guess.mat")
+    KR_LR_W .= read(klw, "KR_LR_W")
+    close(klw)
+
+    pel = matopen("$G/p_E_LR_guess.mat")
+    p_E_LR .= read(pel, "p_E_LR")
+    close(pel)
+
+    wl = matopen("$G/w_LR_guess.mat")
+    w_LR .= read(wl, "w_LR")
+    close(wl)
+
+    dol = matopen("$G/Dout_guess_LR.mat")
+    result_Dout_LR .= read(dol, "result_Dout_LR")
+    close(dol)
+
+    yol = matopen("$G/Yout_guess_LR.mat")
+    result_Yout_LR .= read(yol, "result_Yout_LR")
+    close(yol)
+
+    pcl = matopen("$G/PC_guess_LR.mat")
+    PC_guess_LR .= read(pcl, "PC_guess_LR")
+    close(pcl)
+    return laboralloc_LR, KR_LR_S, KR_LR_W, p_E_LR, w_LR, result_Dout_LR, result_Yout_LR, PC_guess_LR
+end
+
 function ss_update_params!(p_KR_bar_LR::Matrix, p_addon, params::StructParams, R_LR, regionParams, thetabar_LR::Matrix, 
-                            curtailmentswitch, curtailmentfactor::Vector, p_E_LR::Matrix, KR_LR::Matrix, 
+                            curtailmentswitch, curtailmentfactor::Vector, p_E_LR::Matrix, KR_LR::Vector, 
                             KR_LR_S::Matrix, KR_LR_W::Matrix, SShare_LR::Matrix, diffK, diffp, pE_S_FE::Vector,
                             config::ModelConfig)
     pE_S_FE .= (p_KR_bar_LR .+ p_addon .- (p_KR_bar_LR .+ p_addon) .* (1 .- params.deltaR) / R_LR) .* regionParams.costshifter ./ thetabar_LR ./ (1 .- curtailmentswitch .* curtailmentfactor)
@@ -196,17 +239,17 @@ function new_grad_f(g, x...)
     return
 end
 
-function set_battery(KR_LR::Matrix, hoursofstorage::Int64, params::StructParams, Initialprod::Int64, T::Int64)
+function set_battery(KR_LR::Vector, hoursofstorage::Int64, params::StructParams, Initialprod::Int64, T::Int64)
     B_LR = KR_LR .* hoursofstorage
     Depreciation_B = B_LR .* params.deltaB
-    cumsum = sum(Depreciation_B)
-    cumsum = cumsum .* (params.iota).^(1:500)
+    cs = sum(Depreciation_B)
+    cumsum = cs .* (params.iota).^(1:500)
     Qtotal_LR_B = sum(cumsum)
     p_B = (Initialprod .* (params.iota) .^ (T) + Qtotal_LR_B) .^ (-params.gammaB)
     return p_B
 end
 
-function update_battery(KR_LR::Matrix, hoursofstorage::Int64, params::StructParams)
+function update_battery(KR_LR::Vector, hoursofstorage::Int64, params::StructParams)
     B_LR = KR_LR .* hoursofstorage
     Depreciation_B = B_LR .* params.deltaB
     cumsum = sum(Depreciation_B)
@@ -216,37 +259,46 @@ function update_battery(KR_LR::Matrix, hoursofstorage::Int64, params::StructPara
     return p_B
 end
 
+function update_offgrid_LR!(kk::Int, result::NamedTuple, result_Dout_LR::Matrix{Any}, result_Yout_LR::Matrix{Any}, result_price_LR::Vector{Vector})
+    for jj in 1:majorregions.n[kk]
+        #result = fetch(tasks[kk])
+        result_Dout_LR[kk][jj] = result.P_out2[1]
+        result_Yout_LR[kk][jj] = result.P_out2[2]
+        result_price_LR[kk][1][1, jj] = result.price[1]
+    end
+end
+
 mutable struct StructPowerOutput
-    KR_LR_S::Matrix{Float64}
-    KR_LR_W::Matrix{Float64}
-    p_E_LR::Matrix{Float64}
-    D_LR::Vector{Float64}
-    YE_LR::Vector{Float64}
+    KR_LR_S::Matrix{Float64} #
+    KR_LR_W::Matrix{Float64} #
+    p_E_LR::Matrix{Float64} #
+    D_LR::Vector{Float64} #
+    YE_LR::Vector{Float64} #
     PC_guess_LR::Matrix{Float64}
-    PI_LR::Vector{Float64}
-    w_LR::Matrix{Float64}
+    PI_LR::Vector{Float64} #
+    w_LR::Matrix{Float64} #
     laboralloc_LR::Matrix{Float64}
     p_KR_bar_LR::Matrix{Float64}
-    KR_LR::Matrix{Float64}
-    KF_LR::Matrix{Float64}
-    p_KR_LR_S::Vector{Float64}
-    p_KR_LR_W::Vector{Float64}
-    p_B::Float64
-    p_F_LR::Float64
+    KR_LR::Vector{Float64} #
+    KF_LR::Matrix{Float64} #
+    p_KR_LR_S::Float64 ##
+    p_KR_LR_W::Float64 ##
+    p_B::Float64 #
+    p_F_LR::Float64 #
     Lsector::Matrix{Float64}
-    YF_LR::Vector{Float64}
-    diffK::Float64
-    diffp::Float64
-    result_Dout_LR::Matrix{Any}
-    result_Yout_LR::Matrix{Any}
-    result_YFout_LR::Vector{Any}
-    result_price_LR::Vector{Any}
-    KP_LR::Vector{Float64}
-    rP_LR::Vector{Float64}
-    Depreciation_LR_S::Matrix{Float64}
-    Depreciation_LR_W::Matrix{Float64}
-    w_real::Vector{Float64}
-    PC_LR::Vector{Float64}
+    YF_LR::Vector{Float64} #
+    diffK::Float64 #
+    diffp::Float64 #
+    result_Dout_LR::Matrix{Any} #
+    result_Yout_LR::Matrix{Any} #
+    result_YFout_LR::Vector{Any} #
+    result_price_LR::Vector{Any} #
+    KP_LR::Matrix{Float64} ##
+    rP_LR::Matrix{Float64} #
+    Depreciation_LR_S::Float64 ##
+    Depreciation_LR_W::Float64 ##
+    w_real::Vector{Float64} #
+    PC_LR::Vector{Float64} #
 end
 
 function solve_power_output(RWParams::StructRWParams, params::StructParams, RunBatteries::Int, RunCurtailment::Int,
@@ -254,16 +306,18 @@ function solve_power_output(RWParams::StructRWParams, params::StructParams, RunB
     regionParams::StructRWParams, curtailmentswitch::Int, interp3, T::Int, kappa::Float64, mrkteq::StructMarketEq, config::ModelConfig, 
     pB_shifter::Float64, G::String)
 
-    laboralloc_LR, KR_LR_S, KR_LR_W, p_E_LR, w_LR, result_Dout_LR, result_Yout_LR, PC_guess_LR = ss_load_mat(G)
 
-    global laboralloc_LR
-    global KR_LR_S
-    global KR_LR_W
-    global p_E_LR
-    global w_LR
-    global result_Dout_LR
-    global result_Yout_LR
-    global PC_guess_LR
+    laboralloc_LR, KR_LR_S, KR_LR_W, p_E_LR, w_LR, result_Dout_LR, result_Yout_LR, PC_guess_LR = ss_load_mat(G) # 1.35 k allocations: 1.808 MB
+
+
+    global laboralloc_LR 
+    global KR_LR_S 
+    global KR_LR_W 
+    global p_E_LR   
+    global w_LR     
+    global result_Dout_LR       
+    global result_Yout_LR       
+    global PC_guess_LR          
 
     KF_LR=RWParams.KF/10000    # add in minimum of generation
     #maxF_SS=KF_LR
@@ -276,25 +330,25 @@ function solve_power_output(RWParams::StructRWParams, params::StructParams, RunB
     # get guess for long run renewable capital prices
     Deprecations_S = KR_LR_S*params.deltaR
     Deprecations_W = KR_LR_W*params.deltaR
-    cumsum_S = sum(Deprecations_S)
-    cumsum_W = sum(Deprecations_W)
-    cumsum_S = cumsum_S .* (params.iota) .^ (1:500)
-    cumsum_W = cumsum_W .* (params.iota) .^ (1:500)
+    c_S = sum(Deprecations_S)
+    c_W = sum(Deprecations_W)
+    cumsum_S = c_S .* (params.iota) .^ (1:500)
+    cumsum_W = c_W .* (params.iota) .^ (1:500)
     Qtotal_LR_S = sum(cumsum_S)
     Qtotal_LR_W = sum(cumsum_W)
 
     global Lsector = laboralloc_LR .* params.L
+    KR_LR = Vector{Float64}(undef, 2531)
 
-    KR_LR_S = KR_LR_S .+ 0.01
-    KR_LR_W = KR_LR_W .+ 0.01
-    KR_LR = KR_LR_S .+ KR_LR_W
+    KR_LR_S .+= 0.01
+    KR_LR_W .+= 0.01
+    KR_LR .= KR_LR_S .+ KR_LR_W
 
     if RunBatteries==0 && RunCurtailment==0
         pB_shifter = 0
         config.hoursofstorage=0
     end  
 
-    # output p_B
     p_B = set_battery(KR_LR, config.hoursofstorage, params, Initialprod, T)
 
 
@@ -326,11 +380,10 @@ function solve_power_output(RWParams::StructRWParams, params::StructParams, RunB
     rP_LR = Vector{Float64}(undef, 2531)
     pE_S_FE = Vector{Float64}(undef, 2531)
 
-
-    rP_LR .= (R_LR - 1 + params.deltaP).*PC_guess_LR
+    # set long-run capital returns
+    rP_LR = (R_LR - 1 + params.deltaP).*PC_guess_LR     # long run return on production
 
     while diffK > 10^(-2)
-
         println("Number of iterations outer while loop: ", niters)
         println("Diffk: ", diffK)
         diffend = 1
@@ -340,7 +393,6 @@ function solve_power_output(RWParams::StructRWParams, params::StructParams, RunB
         #while diffend > tol
         println("Number of iterations inner while loop: ", niters_in)
 
-
         # set long run goods prices 
         pg_LR_s = w_LR .^ (params.Vs[:, 1]' .* ones(params.J, 1)) .* 
         p_E_LR .^ ((params.Vs[:, 2]'.* ones(params.J, 1)) .+ (params.Vs[:, 3]'.* ones(params.J, 1))) .* 
@@ -349,22 +401,29 @@ function solve_power_output(RWParams::StructRWParams, params::StructParams, RunB
 
 
         ss_optimize_region!(result_price_LR, result_Dout_LR, result_Yout_LR, result_YFout_LR, Lossfac_LR, pg_LR_s, majorregions, Linecounts, RWParams, laboralloc_LR, Lsector, params, w_LR,
-        rP_LR, p_E_LR, kappa, regionParams, KF_LR, p_F_LR, linconscount, KR_LR_S, KR_LR_W, mrkteq.result_Yout_init)
+        rP_LR, p_E_LR, kappa, regionParams, KF_LR, p_F_LR, linconscount, KR_LR_S, KR_LR_W)
 
-
-        kk = params.N
+        kk = params.N        
 
         KRshifter, YFmax, guess, power, KFshifter, shifter = ss_second_loop(majorregions, Lsector, mrkteq.laboralloc, params, w_LR, rP_LR,
                                                                 result_Dout_LR, result_Yout_LR, pg_LR_s, p_E_LR, kappa,
                                                                 regionParams, KR_LR_S, KR_LR_W, KF_LR, kk, p_F_LR)
 
-        global sub = Matrix{Float64}(undef, majorregions.n[kk], 1)
+        for kk=1:(params.N-1)
+            ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
+            p_E_LR[ind] .= result_price_LR[kk]
+            D_LR[ind].= result_Dout_LR[kk]
+            YE_LR[ind] .= result_Yout_LR[kk]
+            YF_LR[ind] .= result_YFout_LR[kk]
+            PI_LR[ind, 1] .= sum(result_price_LR[kk] .* (result_Dout_LR[kk].- result_Yout_LR[kk])) .*
+                            params.L[ind, 1] ./
+                            sum(params.L[ind, 1])
+        end
 
-        loop_results = Vector{NamedTuple{(:jj, :P_out1, :price), Tuple{Int, Vector{Float64}, Vector{Float64}}}}(undef, majorregions.n[kk])
-        tasks = Vector{Task}(undef, majorregions.n[kk])
-        for jj in 1:majorregions.n[kk]
-            tasks[jj] = Threads.@spawn begin
-            con = [1 -1]
+        kk = params.N        
+        mm = majorregions.n[kk] 
+        P_out2 = Matrix{Float64}(undef, 2, mm)
+        for jj in 1:mm
             guess = [1; KRshifter[jj]]
             LB = [0; KRshifter[jj]]
             UB = [10^6; YFmax[jj] + KRshifter[jj]]
@@ -374,75 +433,31 @@ function solve_power_output(RWParams::StructRWParams, params::StructParams, RunB
             model = Model(Ipopt.Optimizer)
             set_silent(model)
             @variable(model, LB[i] <= x[i=1:l_guess] <= UB[i], start=guess[i])
-            @constraint(model, c1, con * x <= 0) 
+            @constraint(model, c1, x[1] - x[2] == 0) 
             @objective(model, Min, obj2(x, power[jj], shifter[jj], KFshifter[jj], KRshifter[jj], p_F_LR, params))
             optimize!(model)
+            value.(x)
 
-            P_out2 = value.(x)
-            price = Price_Solve(P_out2, shifter[jj], 1, params)
+            P_out2[:, jj] .= value.(x)
+            price = Price_Solve(P_out2[:, jj], shifter[jj], 1, params)[1]
 
-            return (jj = jj, P_out2 = P_out2, price=price)
-            end
+            result_Dout_LR[kk][jj] = P_out2[1, jj]        
+            result_Yout_LR[kk][jj] = P_out2[2, jj] 
+            result_price_LR[kk][1][1, jj] = price # this is fine
         end
 
-        for jj in 1:majorregions.n[kk]
-            result = fetch(tasks[kk])
-            result_Dout_LR[kk][jj] = result.P_out2[1]
-            result_Yout_LR[kk][jj] = result.P_out2[2]
-            sub[jj] = P_out2[2] - KRshifter[jj]
-            result_price_LR[kk][1][1, jj] = result.price[1]
-        end    
-
-        """Threads.@threads for jj = 1:majorregions.n[kk]
-            #for jj = 1:majorregions.n[kk]
-            # solve market equilibrium
-            local con = [1 -1]
-            local guess = [1; KRshifter[jj]]
-            local LB = [0; KRshifter[jj]]
-            local UB = [10^6; YFmax[jj] + KRshifter[jj]]
-            local l_guess = length(guess)
-
-            local x = Vector{Float64}(undef, 2)
-            local model = Model(Ipopt.Optimizer)
-            set_silent(model)
-            @variable(model, LB[i] <= x[i=1:l_guess] <= UB[i], start=guess[i])
-            @constraint(model, c1, con * x <= 0) 
-            @objective(model, Min, obj2(x, power[jj], shifter[jj], KFshifter[jj], KRshifter[jj], p_F_LR, params))
-            optimize!(model)
-
-            local P_out2 = value.(x)
-
-            result_Dout_LR[kk][jj] = P_out2[1]
-            result_Yout_LR[kk][jj] = P_out2[2]
-            sub[jj] = P_out2[2] - KRshifter[jj]
-            result_price_LR[kk][1][1, jj] = Price_Solve(P_out2, shifter[jj], 1, params)[1]
-        end"""
-
-        # used sub to directly define YF_LR below
-
-        for kk=1:(params.N)
-            ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
-            if kk <= 12
-                p_E_LR[ind] .= result_price_LR[kk]
-                D_LR[ind].= result_Dout_LR[kk]
-                YE_LR[ind] .= result_Yout_LR[kk]
-                YF_LR[ind] .= result_YFout_LR[kk]
-                PI_LR[ind, 1] .= sum(result_price_LR[kk] .* (result_Dout_LR[kk].- result_Yout_LR[kk])) .*
-                                params.L[ind, 1] ./
-                                sum(params.L[ind, 1])
-            else
-                result_price_LR[kk][1] .= clamp.(result_price_LR[kk][1], 0.001, 1)
-                matrix_values = result_price_LR[kk][1]
-                p_E_LR[ind] .= vec(matrix_values)
-                D_LR[ind] = result_Dout_LR[kk]
-                YE_LR[ind] = result_Yout_LR[kk]
-                YF_LR[ind] .= sub
-                PI_LR[ind] .= sum(result_price_LR[kk][1] .* (result_Dout_LR[kk].-result_Yout_LR[kk])) .*
-                                                                                params.L[ind, 1] ./
-                                                                                sum(params.L[ind, 1])
-                PI_LR[ind] .= clamp.(PI_LR[ind], 0.0, 0.00001)
-            end    
+        for jj in 1:mm
+            result_YFout_LR[kk][1][1, jj] = P_out2[1, jj] - KRshifter[jj]
         end
+        
+        ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
+        YF_LR[ind] .= vec(result_YFout_LR[kk][1])
+        result_price_LR[kk][1] .= clamp.(result_price_LR[kk][1], 0.001, 1) # bound the prices
+        p_E_LR[ind] .= vec(result_price_LR[kk][1])
+        D_LR[ind] .= vec(result_Dout_LR[kk])
+        YE_LR[ind] .= vec(result_Yout_LR[kk])
+        PI_LR[ind] .= sum(result_price_LR[kk][1] .* (result_Dout_LR[kk]-result_Yout_LR[kk])) .*
+                                                                params.L[ind, 1] ./ sum(params.L[ind, 1])
 
         jj = jj+1
 
@@ -463,7 +478,7 @@ function solve_power_output(RWParams::StructRWParams, params::StructParams, RunB
         global Lsector = Lsector .* clamp.(1 .+ 0.2 .* (relexp .- relab) ./ relab, 0.8, 1.2)
         Lsector = Lsector ./ sum(Lsector, dims=2) .* params.L
 
-        #diffend = 0.01
+        diffend = 0.01
         niters_in += 1
         #end
 
@@ -506,23 +521,21 @@ function solve_power_output(RWParams::StructRWParams, params::StructParams, RunB
         end
 
         # generate curtailment factor for off grid-regions
-        for kk=params.N
-            ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
-            global renewshare_LR[ind,1] .= 1 .- YF_LR[ind,:] ./ YE_LR[ind,:]
-            SShare_region_LR[ind, 1] = SShare_LR[ind]
-            curtailmentfactor_S[ind] .= renewshare_LR[ind, 1] .* SShare_region_LR[ind]
-            curtailmentfactor_W[ind] .= renewshare_LR[ind, 1] .* (1 .- SShare_region_LR[ind])
-            x_vals = curtailmentfactor_S[ind]
-            y_vals = curtailmentfactor_W[ind]
-            z_vals = repeat([config.hoursofstorage], length(ind))
+        kk=params.N
+        ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
+        global renewshare_LR[ind, 1] .= 1 .- (YF_LR[ind,:] ./ YE_LR[ind,:])   
+        SShare_region_LR[ind, 1] = SShare_LR[ind]   
+        curtailmentfactor_S[ind] .= renewshare_LR[ind, 1] .* SShare_region_LR[ind]   
+        any(curtailmentfactor_S[ind] .> 1)     
+        curtailmentfactor_W[ind] .= renewshare_LR[ind, 1] .* (1 .- SShare_region_LR[ind])
 
-            for i in eachindex(ind)
-                global curtailmentfactor[ind[i], 1] = interp3(y_vals[i], x_vals[i], z_vals[i])
-            end
+        x_vals = curtailmentfactor_S[ind]
+        y_vals = curtailmentfactor_W[ind]
+        z_vals = repeat([config.hoursofstorage], length(ind))
+
+        for i in eachindex(ind)
+            global curtailmentfactor[ind[i], 1] = interp3(y_vals[i], x_vals[i], z_vals[i])
         end
-
-        # if market price is above free entry price, increase renewable capital
-        # decrease otherwise
 
         diffK, diffp = ss_update_params!(p_KR_bar_LR, p_addon, params, R_LR, regionParams, thetabar_LR, curtailmentswitch,
                     curtailmentfactor, p_E_LR, KR_LR, KR_LR_S, KR_LR_W, SShare_LR,
@@ -532,6 +545,7 @@ function solve_power_output(RWParams::StructRWParams, params::StructParams, RunB
         niters += 1
         global KRshifter
     end
+
     return StructPowerOutput(
         KR_LR_S,
         KR_LR_W,
@@ -568,7 +582,7 @@ end
 
 function ss_optimize_region_imp!(result_price_LR::Vector, result_Dout_LR::Matrix, result_Yout_LR::Matrix, result_YFout_LR::Vector, Lossfac_LR::Matrix,
     pg_LR_s::Matrix, majorregions::DataFrame, Linecounts::DataFrame, laboralloc_LR::Matrix, Lsector::Matrix, params::StructParams, w_LR::Matrix, 
-    rP_LR::Vector, p_E_LR::Matrix, kappa::Float64, regionParams, KF_LR::Matrix, p_F_LR::Float64,
+    rP_LR::Matrix, p_E_LR::Matrix, kappa::Float64, regionParams, KF_LR::Matrix, p_F_LR::Float64,
     linconscount::Int, KR_LR_S::Matrix, KR_LR_W::Matrix, RegionImp)
 
     n_regions = params.N - 1

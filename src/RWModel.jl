@@ -16,7 +16,6 @@ import .ModelConfiguration: ModelConfig
 #Pkg.add("./DrawGammas")
 using DrawGammas #StructAllParams, StructParams
 
-
 # Load Data
 include("./functions/DataAdjustments.jl")
 include("./functions/DataLoadsFunc.jl")
@@ -54,7 +53,7 @@ import .WriteDataBattery: writedata_battery
 # Long Run Equilibrium with Exogenous Tech
 include("./functions/SteadyStateExogFunc.jl")
 include("./SteadyStateExog.jl")
-import .SteadyStateExog: solve_steadystate_exog
+import .SteadyStateExog: solve_steadystate_exog, StructSteadyStateExog
 
 # Transitional Dynamics with Exogenous Tech
 include("./functions/TransitionExogFunc.jl")

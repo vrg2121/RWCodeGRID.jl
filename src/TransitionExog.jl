@@ -10,6 +10,9 @@ import DataFrames: DataFrame
 import SparseArrays: sparse
 import ..ModelConfiguration: ModelConfig
 import DrawGammas: StructAllParams
+import ..DataLoads: StructAllData
+import ..Market: StructMarketOutput
+import ..SteadyStateExog: StructSteadyStateExog
 
 export solve_transition_exog
 
@@ -34,7 +37,7 @@ Named tuple containing path of renewable energy transition with exogenous tech a
 ## Notes
 Calculated with some variations when RunTransition==1, RunBatteries==1, RunExog==1, RunCurtailment==1. Not calculated when RunImprovement==1.
 """
-function solve_transition_exog(P::StructAllParams, DL::NamedTuple, M::NamedTuple, S::NamedTuple, config::ModelConfig, exogindex::Int64)
+function solve_transition_exog(P::StructAllParams, DL::StructAllData, M::StructMarketOutput, S::StructSteadyStateExog, config::ModelConfig, exogindex::Int64)
 
     # set st 
     st = zeros(P.params.J, P.T + 1)

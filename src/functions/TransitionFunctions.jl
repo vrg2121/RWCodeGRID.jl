@@ -97,59 +97,59 @@ end
 function data_set_up_transition(t::Int, kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RWParams, laboralloc_path::Array, Lsectorpath_guess::Array, params::StructParams,
     w_path_guess::Union{Matrix, Vector}, rP_path::Matrix, pg_path_s::Array, p_E_path_guess::Union{Vector, Matrix}, kappa::Float64, regionParams, KF_path::Matrix, p_F_path_guess::Transpose, 
     linconscount::Int, KR_path_S::Matrix, KR_path_W::Matrix)
-    local ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
-    local n = majorregions.n[kk]
-    local l_ind = Linecounts.rowid2[kk]:Linecounts.rowid[kk]
-    local gam = RWParams.Gam[kk]
-    local l_n = Linecounts.n[kk]
+    ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
+    n = majorregions.n[kk]
+    l_ind = Linecounts.rowid2[kk]:Linecounts.rowid[kk]
+    gam = RWParams.Gam[kk]
+    l_n = Linecounts.n[kk]
 
-    local secalloc = laboralloc_path[ind, :, t]
-    local Lshifter = Lsectorpath_guess[ind,:,t]
-    local Kshifter=Lsectorpath_guess[ind,:,t] .* (params.Vs[:,4]' .* ones(n,1)) ./
+    secalloc = laboralloc_path[ind, :, t]
+    Lshifter = Lsectorpath_guess[ind,:,t]
+    Kshifter=Lsectorpath_guess[ind,:,t] .* (params.Vs[:,4]' .* ones(n,1)) ./
             (params.Vs[:,1]' .* ones(n,1)) .*
             (w_path_guess[ind, t] ./ rP_path[ind,t])
     #Ltotal = sum(Lshifter, dims=2)
 
     # define data for inequality constraints
-    local linecons = RWParams.Zmax[l_ind]
-    local Gammatrix = zeros(size(gam, 1), size(gam, 2) + 1)
-    local Gammatrix[:, 2:end] = gam 
+    linecons = RWParams.Zmax[l_ind]
+    Gammatrix = zeros(size(gam, 1), size(gam, 2) + 1)
+    Gammatrix[:, 2:end] = gam 
     if linconscount < l_n
         Random.seed!(1)
         randvec = rand(l_n)
         randvec = randvec .> (linconscount / l_n)
         Gammatrix[randvec, :] .= 0
     end
-    local stacker = [-Matrix(I, n, n) Matrix(I, n, n)]
-    local Gammatrix = sparse(Gammatrix) * sparse(stacker)
-    local Gammatrix = [Gammatrix; -Gammatrix]
-    local linecons = [linecons; linecons]
+    stacker = [-Matrix(I, n, n) Matrix(I, n, n)]
+    Gammatrix = sparse(Gammatrix) * sparse(stacker)
+    Gammatrix = [Gammatrix; -Gammatrix]
+    linecons = [linecons; linecons]
 
     # define shifters for objective function
-    local pg_s = pg_path_s[ind, :, t]
-    local p_F_in = p_F_path_guess[:,t]
-    local prices = p_E_path_guess[ind,t] .* ones(1, params.I)
-    local power = (params.Vs[:,2]' .* ones(n, 1)) .+ (params.Vs[:,3]' .* ones(n, 1))
-    local shifter = pg_s .*
+    pg_s = pg_path_s[ind, :, t]
+    p_F_in = p_F_path_guess[:,t]
+    prices = p_E_path_guess[ind,t] .* ones(1, params.I)
+    power = (params.Vs[:,2]' .* ones(n, 1)) .+ (params.Vs[:,3]' .* ones(n, 1))
+    shifter = pg_s .*
             (kappa .+ (prices ./ (kappa .* p_F_in)) .^ (params.psi - 1)) .^ (params.psi / (params.psi-1) .* (params.Vs[:,3]' .* ones(n,1))) .*
             (1 .+ (params.Vs[:,3]' .* ones(n,1)) ./ (params.Vs[:,2]' .* ones(n, 1))) .^ (-(params.Vs[:,2]' .* ones(n,1)) .- (params.Vs[:,2]' .* ones(n,1))) .*
             params.Z[ind] .*
             params.zsector[ind, :] .*
             Lshifter .^ (params.Vs[:,1]' .* ones(n,1)) .*
             Kshifter .^ (params.Vs[:,4]' .* ones(n,1)) 
-    local shifter = shifter .* secalloc .^ power
-    local KRshifter = regionParams.thetaS[ind] .* KR_path_S[ind, t] .+ regionParams.thetaW[ind] .* KR_path_W[ind, t]
-    local KFshifter = KF_path[ind, t]
+    shifter = shifter .* secalloc .^ power
+    KRshifter = regionParams.thetaS[ind] .* KR_path_S[ind, t] .+ regionParams.thetaW[ind] .* KR_path_W[ind, t]
+    KFshifter = KF_path[ind, t]
 
     # define bounds
-    local YFmax = KF_path[ind,t] # DIFFERENT
-    local LB = [zeros(n); KRshifter]
-    local UB = [fill(1000, n); YFmax .+ KRshifter .+ 0.01]
+    YFmax = KF_path[ind,t] # DIFFERENT
+    LB = [zeros(n); KRshifter]
+    UB = [fill(1000, n); YFmax .+ KRshifter .+ 0.01]
 
     # define guess
-    local guess = [KRshifter; KRshifter .+ 0.0001]
-    local l_guess = length(guess)
-    local mid = l_guess ÷ 2
+    guess = [KRshifter; KRshifter .+ 0.0001]
+    l_guess = length(guess)
+    mid = l_guess ÷ 2
 
     return l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid, p_F_in
 
@@ -319,7 +319,6 @@ function transition_electricity_off_grid!(result_price_path::Matrix, result_Dout
         for jj in 1:n 
             tasks[jj] = Threads.@spawn begin
                 # solve market equilibrium
-                con = [1 -1]
                 guess = [1; KRshifter[jj]]
                 LB = [0; KRshifter[jj]]
                 UB = [10^6; YFmax[jj] + KRshifter[jj]]
@@ -329,7 +328,7 @@ function transition_electricity_off_grid!(result_price_path::Matrix, result_Dout
                 model = Model(Ipopt.Optimizer) 
                 set_silent(model)
                 @variable(model, LB[i] <= x[i=1:l_guess] <= UB[i], start=guess[i])
-                @constraint(model, c1, con * x <= 0) 
+                @constraint(model, c1, x[1] - x[2] == 0) 
                 @objective(model, Min, obj2(x, power[jj], shifter[jj], KFshifter[jj], KRshifter[jj], p_F_in[1], params))
                 optimize!(model)
 
@@ -703,10 +702,9 @@ function solve_transition_eq(R_LR::Float64, GsupplyCurves::StructGsupply, decayp
         #                        UPDATE TRANSITION LABOUR MARKET                       #
         # ---------------------------------------------------------------------------- #
 
-        # cannot safely multithread updating the data without more memory allocations
         for i in 1:capT
             # get capital vec
-            local Ksector = sseq.Lsector .* (params.Vs[:, 4]' .* ones(params.J, 1)) ./
+            Ksector = sseq.Lsector .* (params.Vs[:, 4]' .* ones(params.J, 1)) ./
                             (params.Vs[:, 1]' .* ones(params.J, 1)) .* (w_path_guess[:, i] ./ rP_path[:, i])
             KP_path_guess[:, i] = sum(Ksector, dims=2)
             w_update[:, i], w_real_path[:, i], Incomefactor, PC[:, i]= wage_update_ms(w_path_guess[:, i], p_E_path_guess[:, i], p_E_path_guess[:, i], 
@@ -849,5 +847,7 @@ function solve_transition_eq(R_LR::Float64, GsupplyCurves::StructGsupply, decayp
         )
 
 end
+
+
 
 end

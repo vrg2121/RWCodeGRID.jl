@@ -6,7 +6,18 @@ import ..ModelConfiguration: ModelConfig
 import DrawGammas: StructAllParams
 
 # export variables
-export solve_steadystate_exog
+export solve_steadystate_exog, StructSteadyStateExog
+
+mutable struct StructSteadyStateExog
+    sseqE::StructPowerOutputExog
+    GDP::Float64
+    wr::Vector{Float64}
+    wagechange::Matrix{Float64}
+    welfare_wagechange::Vector{Float64}
+    welfare_capitalchange::Vector{Float64}
+    welfare_electricitychange::Vector{Float64}
+    welfare_fossilchange::Vector{Float64} 
+end
 
 """
     solve_steadystate_exog(P::StructAllParams, DL::NamedTuple, M::NamedTuple, config::ModelConfig, exogindex::Int64, G::String)
@@ -72,15 +83,15 @@ function solve_steadystate_exog(P::StructAllParams, DL::NamedTuple, M::NamedTupl
 
     welfare_fossilchange = -M.mrkteq.fossilsales ./ M.mrkteq.Expenditure_init
 
-    return (
-        sseqE = sseqE,
-        GDP = GDP,
-        wr = wr,
-        wagechange = wagechange,
-        welfare_wagechange = welfare_wagechange,
-        welfare_capitalchange = welfare_capitalchange,
-        welfare_electricitychange = welfare_electricitychange,
-        welfare_fossilchange = welfare_fossilchange
+    return StructSteadyStateExog(
+        sseqE,
+        GDP,
+        wr,
+        wagechange,
+        welfare_wagechange,
+        welfare_capitalchange,
+        welfare_electricitychange,
+        welfare_fossilchange
     )
 
 end

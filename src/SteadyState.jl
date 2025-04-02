@@ -11,7 +11,6 @@ import ..ModelConfiguration: ModelConfig
 import DrawGammas: StructAllParams
 import ..DataLoads: StructAllData
 import ..Market: StructMarketOutput
-import ..SteadyStateFunctions: StructPowerOutput
 
 # export variables
 export solve_steadystate, StructSteadyState
@@ -53,8 +52,8 @@ Calculating a 3D Interpolation (MATLAB interp3()) using Interpolations.jl:
 """
 
 mutable struct StructSteadyState
-    sseq::StructPowerOutput                      # Likely a custom struct; use specific type if known
-    interp3::Any                  # Interpolations.GriddedInterpolation{...}
+    sseq::StructPowerOutput                      
+    interp3::Any                 
     GDP::Float64
     wr::Vector{Float64}
     wagechange::Matrix{Float64}

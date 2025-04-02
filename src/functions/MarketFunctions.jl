@@ -457,49 +457,30 @@ function solve_initial_equilibrium(params::StructParams, wage_init::Vector{Float
                                                                                 regionParams, KR_init_S, KR_init_W, p_F)
 
 
-        loop_results = Vector{NamedTuple{(:jj, :P_out1, :price), Tuple{Int, Vector{Float64}, Vector{Float64}}}}(undef, majorregions.n[kk])
-        tasks = Vector{Task}(undef, majorregions.n[kk])
-        for jj in 1:majorregions.n[kk]
-            tasks[jj] = Threads.@spawn begin
-                # set up variables local to the task
-                guess = [1; KRshifter[jj]]
-                LB = [0; KRshifter[jj]]
-                UB = [10^6; YFmax[jj] + KRshifter[jj]]
-                l_guess = length(guess)
-
-                x = Vector{Float64}(undef, l_guess)
-                model = Model(Ipopt.Optimizer)
-                set_silent(model)
-                @variable(model, LB[i] <= x[i=1:l_guess] <= UB[i], start=guess[i])
-                @constraint(model, c1, x[1] - x[2] <= 0) 
-                @objective(model, Min, obj2(x, power[jj], shifter[jj], KFshifter[jj], KRshifter[jj], p_F, params))
-                optimize!(model)
-
-                # record the output
-                P_out1 = value.(x) 
-
-                price = Price_Solve(P_out1, shifter[jj], 1, params)
         
-                return (jj = jj, P_out1 = P_out1, price=price)
-            end
-                
+        for jj in 1:majorregions.n[kk]                # set up variables local to the task
+            guess = [1; KRshifter[jj]]
+            LB = [0; KRshifter[jj]]
+            UB = [10^6; YFmax[jj] + KRshifter[jj]]
+            l_guess = length(guess)
+
+            x = Vector{Float64}(undef, l_guess)
+            model = Model(Ipopt.Optimizer)
+            set_silent(model)
+            @variable(model, LB[i] <= x[i=1:l_guess] <= UB[i], start=guess[i])
+            @constraint(model, c1, x[1] - x[2] == 0) 
+            @objective(model, Min, obj2(x, power[jj], shifter[jj], KFshifter[jj], KRshifter[jj], p_F, params))
+            optimize!(model)
+
+            # record the output
+            P_out1 = value.(x) 
+
+            price = Price_Solve(P_out1, shifter[jj], 1, params)[1]
+            result_Dout_init[kk][jj] = P_out1[1]
+            result_Yout_init[kk][jj] = P_out1[2]
+            result_price_init[kk][1][1, jj] = price
         end
 
-        # aggregate results once tasks have completed
-        for task in tasks
-            result = fetch(task)
-            loop_results[result.jj] = result
-        end
-
-        P_out .= loop_results[majorregions.n[kk]].P_out1
-
-        # update global arrays safely in a sequential loop.
-        for jj in 1:majorregions.n[kk]
-            result = loop_results[jj]
-            result_Dout_init[kk][jj] = result.P_out1[1]
-            result_Yout_init[kk][jj] = result.P_out1[2]
-            result_price_init[kk][1][1, jj] = result.price[1]
-        end
 
         for kk=1:(params.N - 1)
             ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
