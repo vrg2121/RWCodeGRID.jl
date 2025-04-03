@@ -6,9 +6,12 @@ import LinearAlgebra: Transpose, I, Adjoint
 import Random: Random
 import SparseArrays: sparse
 import ..RegionModel: solve_model
+
+# import relevant structs
 import ..DataLoadsFunc: StructGsupply, StructRWParams
 import DrawGammas: StructParams, StructAllParams
-import ..SteadyState: StructPowerOutput
+import ..MarketFunctions: StructMarketEq
+import ..SteadyStateFunctions: StructPowerOutput
 
 using Ipopt, JuMP
 
@@ -94,8 +97,8 @@ function update_battery_prices!(KR_path::Matrix{Float64}, Qtotal_path_B::Matrix{
     Qtotal_path_B[1] = Initialprod+sum(RWParams.KR) * hoursofstorage
 end
 
-function data_set_up_transition(t::Int, kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RWParams, laboralloc_path::Array, Lsectorpath_guess::Array, params::StructParams,
-    w_path_guess::Union{Matrix, Vector}, rP_path::Matrix, pg_path_s::Array, p_E_path_guess::Union{Vector, Matrix}, kappa::Float64, regionParams, KF_path::Matrix, p_F_path_guess::Transpose, 
+function data_set_up_transition(t::Int, kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc_path::Array, Lsectorpath_guess::Array, params::StructParams,
+    w_path_guess::Union{Matrix, Vector}, rP_path::Matrix, pg_path_s::Array, p_E_path_guess::Union{Vector, Matrix}, kappa::Float64, regionParams::StructRWParams, KF_path::Matrix, p_F_path_guess::Transpose, 
     linconscount::Int, KR_path_S::Matrix, KR_path_W::Matrix)
     ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
     n = majorregions.n[kk]
@@ -377,8 +380,7 @@ function fill_paths!(p_E_path_guess::Matrix, D_path::Matrix, Y_path::Matrix, YF_
     end
 end
 
-function smooth_prices!(p_E_path_guess::Matrix{Float64},
-     D_path::Matrix{Float64}, Y_path::Matrix{Float64}, YF_path::Matrix{Float64},
+function smooth_prices!(p_E_path_guess::Matrix{Float64}, D_path::Matrix{Float64}, Y_path::Matrix{Float64}, YF_path::Matrix{Float64},
     sseq::StructPowerOutput, expo3::Vector, expo4::Vector, capT::Int, T::Int)
     for kk in capT+1:T
         jj = kk - capT
@@ -393,7 +395,7 @@ function smooth_prices!(p_E_path_guess::Matrix{Float64},
     end
 end
 
-function update_fossil_market!(diffpF::Float64, fossilsales_path::Matrix, p_F_path_guess::Transpose{Float64, Vector{Float64}},
+function update_fossil_market!(fossilsales_path::Matrix, p_F_path_guess::Transpose{Float64, Vector{Float64}},
                                 laboralloc_path::Array, D_path::Matrix, params::StructParams, p_E_path_guess::Matrix, YF_path::Matrix, 
                                 KF_path::Matrix, p_F_int, regions::DataFrame, T::Int, interp1, g::Float64, r_path::Adjoint{Float64, Vector{Float64}}, 
                                 fusage_total_path::Matrix, p_F_update::Matrix)
@@ -750,9 +752,9 @@ function solve_transition_eq(R_LR::Float64, GsupplyCurves::StructGsupply, decayp
         # ---------------------------------------------------------------------------- #
         #                             UPDATE FOSSIL MARKET                             #
         # ---------------------------------------------------------------------------- #
-        diffpF = 1.0
+        #diffpF = 1.0
 
-        update_fossil_market!(diffpF, fossilsales_path, p_F_path_guess,
+        update_fossil_market!(fossilsales_path, p_F_path_guess,
                                 laboralloc_path, D_path, params, p_E_path_guess, YF_path, KF_path,
                                 p_F_int, regions, T, interp1, g, r_path, fusage_total_path, p_F_update)
         # updates p_F_path_guess, fossilsales_path, diffpF
