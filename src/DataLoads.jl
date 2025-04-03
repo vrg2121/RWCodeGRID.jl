@@ -10,7 +10,6 @@ using ..DataLoadsFunc, ..DataAdjustments
 import CSV: CSV
 import DataFrames: DataFrame
 import DrawGammas: StructAllParams
-import VariableStructs: StructAllData
 
 export StructAllData, load_data
 

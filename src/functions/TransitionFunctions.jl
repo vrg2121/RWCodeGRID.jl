@@ -459,7 +459,7 @@ mutable struct StructTransEq
 end
 
 function solve_transition_eq(R_LR::Float64, GsupplyCurves::StructGsupply, decayp::Float64, T::Int64, params::StructParams, sseq::StructPowerOutput, KR_init_S::Matrix, 
-    KR_init_W::Matrix, mrkteq::StructMarketEq, Initialprod::Int, RWParams::StructRWParaMS, curtailmentswitch::Int64, 
+    KR_init_W::Matrix, mrkteq::StructMarketEq, Initialprod::Int, RWParams::StructRWParams, curtailmentswitch::Int64, 
     p_KR_bar_init::Matrix, laboralloc_init::Matrix, regionParams::StructRWParams, majorregions::DataFrame, Linecounts::DataFrame, linconscount::Int, 
     kappa::Float64, regions::DataFrame, Transiter::Int, st::Matrix, hoursofstorage::Int, pB_shifter::Float64, g::Float64, 
     wage_init::Vector, p_KR_init_S::Float64, p_KR_init_W::Float64, p_F_int::Float64, interp3::Any)
