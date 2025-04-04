@@ -34,6 +34,8 @@ This function writes data only when RunTransition==1.
 """
 
 function writedata(P::StructAllParams, DL::StructAllData, M::StructMarketOutput, S::StructSteadyState, T::StructTransOutput, Subsidy::Int, config::ModelConfig, R::String)
+    SGE_TASK_ID = Base.parse(Int, ENV["SGE_TASK_ID"])
+
     # initialize data
     yearindex_cap = Vector{Int64}(undef, 20)
     yearindex_share = Vector{Int64}(undef, 30)
@@ -46,8 +48,8 @@ function writedata(P::StructAllParams, DL::StructAllData, M::StructMarketOutput,
     GDPUS = Matrix{Float64}(undef, 1, 501)
     G = Matrix{Float64}(undef, 2531, 501)
     sharepath = Matrix{Float64}(undef, 30, 16)
-    Sv = Matrix{Float64}(undef, 2531, 501)
-    Subval = Matrix{Float64}(undef, 1, 501)
+    #Sv = Matrix{Float64}(undef, 2531, 501)
+    #Subval = Matrix{Float64}(undef, 1, 501)
 
     # select label
     if Subsidy == 1 && config.hoursofstorage == 0
@@ -64,7 +66,7 @@ function writedata(P::StructAllParams, DL::StructAllData, M::StructMarketOutput,
     yearindex_subsidy .= collect(1:12) .+ 2021
 
     # real wage change 
-    writedlm("$R/Wage_change_{SGE_TASK_ID}.csv", S_wagechange, ",")
+    writedlm("$R/Wage_change/Wage_change_$SGE_TASK_ID.csv", S.wagechange, ",")
 
     # capital price falls 
     capitalpricefall .= (T.transeq.p_KR_bar_path[1, 1:20] ./ T.transeq.p_KR_bar_path[1, 1]) .* 100
@@ -74,75 +76,80 @@ function writedata(P::StructAllParams, DL::StructAllData, M::StructMarketOutput,
     capprice[:, 2] .= capitalpricefall
     capprice[:, 3] .= solarpricefall
     capprice[:, 4] .= windpricefall
-    writedlm("$R/Capital_prices/Capital_prices$(labeller)_{SGE_TASK_ID}.csv", capprice, ",")
+    writedlm("$R/Capital_prices/Capital_prices$(labeller)_$SGE_TASK_ID.csv", capprice, ",")
 
     # renewable shares
     sharepath[:, 1] .= yearindex_share
     sharepath[:, 2:14] .= 100 .* T.renewshare_path_region[:, 1:30]'
     sharepath[:, 15] .= 100 .* T.renewshareUS[1:30]
     sharepath[:, 16] .= 100 .* T.renewshare_path_world[:, 1:30]'
-    writedlm("$R/Renewable_share/Renewable_share$(labeller)_{SGE_TASK_ID}.csv", sharepath, ",")
+    writedlm("$R/Renewable_share/Renewable_share$(labeller)_$SGE_TASK_ID.csv", sharepath, ",")
 
     # subsidy value
     """Sv .= 0.05 .* DL.RWParams.thetaS .* T.transeq.KR_path
     Subval .= sum(Sv, dims=1)
     Subsidyvalue = [yearindex_subsidy Subval[1:12]]
-    writedlm("$R/Subsidy_value/Subsidy_value$(labeller)_{SGE_TASK_ID}.csv", Subsidyvalue, ",")"""   # this is just written over by the second method of calculating Subsidyvalue
+    writedlm("$R/Subsidy_value/Subsidy_value$(labeller)_$SGE_TASK_ID.csv", Subsidyvalue, ",")"""   # this is just written over by the second method of calculating Subsidyvalue
 
     Subsidyvalue = 100 .* T.renewshareUS[1:30]
     Subsidyvalue = [yearindex_subsidy Subsidyvalue[1:12] T.YUS_rel[:, 1:12]']
-    writedlm("$R/Subsidy_value/Subsidy_value$(labeller)_{SGE_TASK_ID}.csv", Subsidyvalue, ",")
+    writedlm("$R/Subsidy_value/Subsidy_value$(labeller)_$SGE_TASK_ID.csv", Subsidyvalue, ",")
 
     # write price results
     pricecsv .= [M.priceresults P.regions.csr_id]
-    writedlm("$R/Price/price$(labeller)_{SGE_TASK_ID}.csv", pricecsv, ",")
+    writedlm("$R/price/price$(labeller)_$SGE_TASK_ID.csv", pricecsv, ",")
 
     # write GDP results
     G .= T.transeq.w_path_guess .* P.params.L ./ T.transeq.PC_path_guess
     GDPUS .= sum(G[1:743, :], dims = 1)
     GDPUS .= GDPUS ./ GDPUS[1]
-    writedlm("$R/GDP_US/GDPUS$(labeller)_{SGE_TASK_ID}.csv", GDPUS, ",")
+    writedlm("$R/GDPUS/GDPUS$(labeller)_$SGE_TASK_ID.csv", GDPUS, ",")
 
     # write investment capital results
     capitalinvestment = Matrix{Float64}(undef, 2531, 502)
     capitalinvestment .= [P.regions.csr_id T.transeq.KR_path]
-    writedlm("$R/Capital_investment/capitalinvestment$(labeller)_{SGE_TASK_ID}.csv", capitalinvestment, ",")
+    writedlm("$R/capitalinvestment/capitalinvestment$(labeller)_$SGE_TASK_ID.csv", capitalinvestment, ",")
 
     # write price results
     pricepath = Matrix{Float64}(undef, 2531, 502)
     pricepath .= [P.regions.csr_id T.transeq.p_E_path_guess] 
-    writedlm("$R/Price_path/pricepath$(labeller)_{SGE_TASK_ID}.csv", pricepath, ",")
+    writedlm("$R/pricepath/pricepath$(labeller)_$SGE_TASK_ID.csv", pricepath, ",")
 
     # write fossil fuel price
     fosspath = Matrix{Float64}(undef, 30, 2)
     fosspath .= [yearindex_share T.transeq.p_F_path_guess[1:30]]
-    writedlm("$R/Fossil_price/Fossil_price$(labeller)_{SGE_TASK_ID}.csv", fosspath, ",")
+    writedlm("$R/Fossil_price/Fossil_price$(labeller)_$SGE_TASK_ID.csv", fosspath, ",")
 
     # write fossil fuel usage
     fosspath .=[yearindex_share T.transeq.fusage_total_path[1:30]]
-    writedlm("$R/Fossil_usage/Fossil_usage$(labeller)_{SGE_TASK_ID}.csv", fosspath, ",")
+    writedlm("$R/Fossil_usage/Fossil_usage$(labeller)_$SGE_TASK_ID.csv", fosspath, ",")
 
     # write welfare changes
     welfare = Matrix{Float64}(undef, 2531, 5)
     welfare .= [P.regions.csr_id S.welfare_wagechange S.welfare_capitalchange S.welfare_electricitychange S.welfare_fossilchange]
-    writedlm("$R/Welfare/welfare_{SGE_TASK_ID}.csv", welfare, ",")
+    writedlm("$R/welfare/welfare_$SGE_TASK_ID.csv", welfare, ",")
 
     if labeller=="_Baseline"
         welfare_2040 = Matrix{Float64}(undef, 2531, 5)
         welfare_2040 .= [P.regions.csr_id T.welfare_wagechange_2040 T.welfare_capitalchange_2040 T.welfare_electricitychange_2040 T.welfare_fossilchange_2040]
-        writedlm("$R/Welfare/welfare_2040_{SGE_TASK_ID}.csv", welfare_2040, ",")
+        writedlm("$R/welfare_2040/welfare_2040_$SGE_TASK_ID.csv", welfare_2040, ",")
     end
 
     # write long run electricity prices
-    writedlm("$R/Price_E_long/priceE_long_{SGE_TASK_ID}.csv", S.sseq.p_E_LR, ",")
+    writedlm("$R/priceE_long/priceE_long_$SGE_TASK_ID.csv", S.sseq.p_E_LR, ",")
 
     # write data for plots
-    writedlm("$R/KR_path/KR_path_{SGE_TASK_ID}.csv", T.transeq.KR_path)
-    writedlm("$R/RenewshareUS/renewshareUS_{SGE_TASK_ID}.csv", T.renewsharUS)
-    writedlm("$R/YF_path/YF_path_{SGE_TASK_ID}.csv", T.transeq.YF_path)
-    writedlm("$R/YR_path/YR_path_{SGE_TASK_ID}.csv", T.transeq.YR_path)
-    writedlm("$R/p_KR_path_S/p_KR_path_S_{SGE_TASK_ID}.csv", T.transeq.p_KR_path_S)
-    writedlm("$R/p_KR_path_W/p_KR_path_W_{SGE_TASK_ID}.csv", T.transeq.p_KR_path_W)
+    KR_path = T.transeq.KR_path
+    YF_path = T.transeq.YF_path
+    YR_path = T.transeq.YR_path
+    p_KR_path_S = T.transeq.p_KR_path_S
+    p_KR_path_W = T.transeq.p_KR_path_W
+    writedlm("$R/KR_path/KR_path_$SGE_TASK_ID.csv", KR_path, ",") # no output
+    writedlm("$R/renewshareUS/renewshareUS_$SGE_TASK_ID.csv", T.renewshareUS, ",") 
+    writedlm("$R/YF_path/YF_path_$SGE_TASK_ID.csv", YF_path, ",") # no output
+    writedlm("$R/YR_path/YR_path_$SGE_TASK_ID.csv", YR_path, ",") # no output
+    writedlm("$R/p_KR_path_S/p_KR_path_S_$SGE_TASK_ID.csv", p_KR_path_S, ",") # no output
+    writedlm("$R/p_KR_path_W/p_KR_path_W_$SGE_TASK_ID.csv", p_KR_path_W, ",") # no output
 
 end
 

@@ -24,6 +24,7 @@ This function writes data only when RunExog==1.
 function writedata_exog(TE::NamedTuple, exogindex::Int, R::String)
     # Constructing a label string
     labeller = "exog" * @sprintf("%02d", exogindex)
+    SGE_TASK_ID = Base.parse(Int, ENV["SGE_TASK_ID"])
 
     # Generating year indices for different categories
     yearindex_share = Vector{Int64}(undef, 30)
@@ -37,7 +38,7 @@ function writedata_exog(TE::NamedTuple, exogindex::Int, R::String)
         100 .* TE.renewshare_path_world[:, 1:30]'
     )
 
-    writedlm("$R/Renewable_share/Renewable_share$(labeller).csv", sharepath, ",")
+    writedlm("$R/Renewable_share/Renewable_share$(labeller)_$SGE_TASK_ID.csv", sharepath, ",")
 
     
 end

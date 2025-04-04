@@ -30,7 +30,7 @@ Model results for capital and battery price falls, renewable shares, US GDP outc
 This function writes data when RunBattery==1 or RunCurtailment==1.
 """
 function writedata_battery(P::StructAllParams, M::NamedTuple, S::NamedTuple, T::NamedTuple, config::ModelConfig, R::String)
-
+    SGE_TASK_ID = Base.parse(Int, ENV["SGE_TASK_ID"])
     curtailmentswitch = P.curtailmentswitch
     hoursofstorage = config.hoursofstorage
     
@@ -51,7 +51,7 @@ function writedata_battery(P::StructAllParams, M::NamedTuple, S::NamedTuple, T::
     G = Matrix{Float64}(undef, 2531, 501)
     sharepath = Matrix{Float64}(undef, 30, 16)
 
-    labeller = "_hours$(lpad(hoursofstorage, 2, '0'))_curt_$(lpad(curtailmentswitch, 2, '0'))"
+    labeller = "_hours$(lpad(hoursofstorage, 2, '0'))_curt_$(lpad(curtailmentswitch, 2, '0'))_$SGE_TASK_ID"
 
     # initialize year indices
     yearindex_cap .= collect(1:20) .+ 2020
@@ -83,23 +83,23 @@ function writedata_battery(P::StructAllParams, M::NamedTuple, S::NamedTuple, T::
 
     # write price results
     pricecsv .= [M.priceresults P.regions.csr_id]
-    writedlm("$R/Price/price$(labeller).csv", pricecsv, ",")
+    writedlm("$R/price/price$(labeller).csv", pricecsv, ",")
 
     # write GDP results
     G .= T.transeq.w_path_guess .* P.params.L ./ T.transeq.PC_path_guess
     GDPUS .= sum(G[1:743, :], dims = 1)
     GDPUS .= GDPUS ./ GDPUS[1]
-    writedlm("$R/GDP_US/GDPUS$(labeller).csv", GDPUS, ",")
+    writedlm("$R/GDPUS/GDPUS$(labeller).csv", GDPUS, ",")
 
     # write capital investment results
     capitalinvestment = Matrix{Float64}(undef, 2531, 502)
     capitalinvestment .= [P.regions.csr_id T.transeq.KR_path]
-    writedlm("$R/Capital_investment/capitalinvestment$(labeller).csv", capitalinvestment, ",")
+    writedlm("$R/capitalinvestment/capitalinvestment$(labeller).csv", capitalinvestment, ",")
 
     # write price results
     pricepath = Matrix{Float64}(undef, 2531, 502)
     pricepath .= [P.regions.csr_id T.transeq.p_E_path_guess] 
-    writedlm("$R/Price_path/pricepath$(labeller).csv", pricepath, ",")
+    writedlm("$R/pricepath/pricepath$(labeller).csv", pricepath, ",")
 
     # write fossil fuel usage
     fosspath = Matrix{Float64}(undef, 30, 2)
@@ -113,11 +113,11 @@ function writedata_battery(P::StructAllParams, M::NamedTuple, S::NamedTuple, T::
     # write welfare changes
     welfare = Matrix{Float64}(undef, 2531, 5)
     welfare .= [P.regions.csr_id S.welfare_wagechange S.welfare_capitalchange S.welfare_electricitychange S.welfare_fossilchange]
-    writedlm("$R/Welfare/welfare$(labeller).csv", welfare, ",")
+    writedlm("$R/welfare/welfare$(labeller).csv", welfare, ",")
 
     welfare_2040 = Matrix{Float64}(undef, 2531, 5)
     welfare_2040 .= [P.regions.csr_id T.welfare_wagechange_2040 T.welfare_capitalchange_2040 T.welfare_electricitychange_2040 T.welfare_fossilchange_2040]
-    writedlm("$R/Welfare/welfare_2040$(labeller).csv", welfare_2040, ",")
+    writedlm("$R/welfare_2024/welfare_2040$(labeller).csv", welfare_2040, ",")
 end
 
 end
