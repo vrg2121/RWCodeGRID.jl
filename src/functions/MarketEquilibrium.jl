@@ -2,7 +2,7 @@
 # functions defined: hessinterior, obj, mycon
 
 module MarketEquilibrium
-export hessinterior, obj, mycon, obj2, Price_Solve, wage_update_ms, grad_f
+export hessinterior, obj, mycon, obj2, Price_Solve, wage_update_ms, grad_f, Price_Solve2
 
 import DrawGammas: StructParams
 
@@ -52,7 +52,6 @@ function Price_Solve(Inputvec::Vector{Float64}, shifter::Union{Matrix, Float64},
     return vec(prices)
 end
 
-
 function location_prices!(pijs::Vector{Matrix{Float64}}, PCs::Matrix{Float64}, Xjdashs::Matrix{Float64}, Yjdashs::Matrix{Float64},
     w0::Vector{Float64}, p_E_D::Vector{Float64}, params, Ej::Matrix{Float64}, 
     p_F::Union{Float64, Vector, Int}, r::Matrix{Float64})
@@ -73,8 +72,7 @@ function location_prices!(pijs::Vector{Matrix{Float64}}, PCs::Matrix{Float64}, X
     end
 end
 
-
-function update_wage_data!(tpijs::Matrix, params, w0::Union{Matrix, Vector}, pES::Union{Vector, Matrix},
+function update_wage_data!(tpijs::Matrix, params::StructParams, w0::Union{Matrix, Vector}, pES::Union{Vector, Matrix},
     p_F::Union{Float64, Vector, Int}, r::Union{Vector, Matrix}, Ej, PCs::Matrix, Xjdashs::Matrix,
     Yjdashs::Matrix)
 
@@ -115,25 +113,9 @@ function update_wage_data!(tpijs::Matrix, params, w0::Union{Matrix, Vector}, pES
         Yjdashs[:, i] = sum((tpijs .^ (-sig)) .* factor, dims=2)
     end
 
-    """for i = 1:params.I
-        @views tpijs .= params.tau[i] .* 
-                        w0 .^ params.Vs[i, 1] .* 
-                        pES .^ (params.Vs[i, 2] + params.Vs[i, 3]) .* 
-                        (params.kappa + (params.kappa .* p_F ./ pES) .^ (1 - params.psi)) .^ 
-                        (-(params.psi / (params.psi - 1)) * params.Vs[i, 3]) .*
-                        r .^ params.Vs[i, 4] ./
-                        (params.Z .* params.zsector[:, i] .* params.cdc)
-                        # this element takes 2156 profiling counts 
-        PCs[:, i] = (sum(tpijs .^ (1 - params.sig), dims=1)) .^ (1 / (1 - params.sig))
-
-        factor = (params.betaS[:, i] .* Ej ./ PCs[:, i].^(1 - params.sig))'
-        Xjdashs[:, i] = sum(tpijs .^ (1 - params.sig) .* factor, dims=2)
-        Yjdashs[:, i] = sum(tpijs .^ (-params.sig) .* factor, dims=2)
-    end"""
-
 end
 
-function price_adjustments!(PC::Vector{Float64}, PCs::Array{Float64}, params, w0::Union{Vector, Matrix}, 
+function price_adjustments!(PC::Vector{Float64}, PCs::Array{Float64}, params::StructParams, w0::Union{Vector, Matrix}, 
                         Xjdashs::Array{Float64}, Xj::Union{Vector, Matrix}, pES::Union{Vector, Matrix}, 
                         pED::Union{Vector, Matrix}, p_F::Union{Float64, Vector, Int}, W_Real::Vector{Float64}, 
                         w_adjustment_factor::Union{Vector, Matrix}, Xjdash::Matrix{Float64})
@@ -177,9 +159,27 @@ function wage_update_ms(w::Union{Vector, Matrix}, p_E_D::Union{Vector, Matrix},p
 
 end
 
-# archived functions no longer being used
+# ---------------------------- Archived Functions ---------------------------- #
 
 """
+
+function update_wage_data()
+    for i = 1:params.I
+        @views tpijs .= params.tau[i] .* 
+                        w0 .^ params.Vs[i, 1] .* 
+                        pES .^ (params.Vs[i, 2] + params.Vs[i, 3]) .* 
+                        (params.kappa + (params.kappa .* p_F ./ pES) .^ (1 - params.psi)) .^ 
+                        (-(params.psi / (params.psi - 1)) * params.Vs[i, 3]) .*
+                        r .^ params.Vs[i, 4] ./
+                        (params.Z .* params.zsector[:, i] .* params.cdc)
+                        # this element takes 2156 profiling counts 
+        PCs[:, i] = (sum(tpijs .^ (1 - params.sig), dims=1)) .^ (1 / (1 - params.sig))
+
+        factor = (params.betaS[:, i] .* Ej ./ PCs[:, i].^(1 - params.sig))'
+        Xjdashs[:, i] = sum(tpijs .^ (1 - params.sig) .* factor, dims=2)
+        Yjdashs[:, i] = sum(tpijs .^ (-params.sig) .* factor, dims=2)
+    end
+end
 
 function mycon(Inputvec::Vector, mat::Matrix, params::StructParams)
     mid = length(Inputvec) ÷ 2

@@ -1,7 +1,6 @@
 module DataLoads
 
-# export data
-export load_data
+export load_data, StructAllData
 
 # load functions
 using ..DataLoadsFunc, ..DataAdjustments
@@ -10,8 +9,6 @@ using ..DataLoadsFunc, ..DataAdjustments
 import CSV: CSV
 import DataFrames: DataFrame
 import DrawGammas: StructAllParams
-
-export StructAllData, load_data
 
 mutable struct StructAllData
     RWParams::StructRWParams
@@ -49,10 +46,16 @@ function load_data(P::StructAllParams, D::String)
 
     # load global csv data
 
-    regions_all, Linedata, majorregions_all, Fossilcapital, Renewablecapital, Electricityregionprices = load_csv_data(D)
+    #regions_all, Linedata, majorregions_all, Fossilcapital, Renewablecapital, Electricityregionprices = load_csv_data(D)
+    # variables not used later: regions_all, Fossilcapital, Renewablecapital, Electricityregionprices
+
+    Linedata = CSV.File("$D/ModelDataset/Linedata.csv") |> DataFrame
+    majorregions_all = CSV.File("$D/ModelDataset/majorregions.csv") |> DataFrame
+
+
 
     # initiate wage
-    wage_init = w_i!(wage_init, P.regions)
+    w_i!(wage_init, P.regions)
 
     # long run interest rate
     R_LR = 1/P.params.beta
@@ -65,7 +68,7 @@ function load_data(P::StructAllParams, D::String)
 
     # load in sectoral shares
 
-    secshares, sectoralempshares = sec_shares!(secshares, sectoralempshares, D)
+    sec_shares!(secshares, sectoralempshares, D)
 
     # ---------------------------------------------------------------------------- #
     #                             Load Fossil Fuel Data                            #
@@ -110,7 +113,7 @@ function load_data(P::StructAllParams, D::String)
     curtmat, samplepointssolar, samplepointswind, samplepointsbat = create_curtmat!(curtmatmx, curtmatmx, curtmatmx, curtmat, D);
 
     # import battery requirements
-    batteryrequirements = battery_req!(batteryrequirements, D)
+    battery_req!(batteryrequirements, D)
 
     return StructAllData(
         RWParams,

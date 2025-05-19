@@ -15,11 +15,10 @@ Writes data outputs to .csv files for analysis. All outputs are in the Results f
 
 ## Inputs
 - `P::StructAllParams` -- Struct of parameters. Created in local package DrawGammas
-- `D::NamedTuple` -- NamedTuple of model data. Output of `DL = load_data(P, D)`
-- `M::NamedTuple` -- NamedTuple of market equilibrium. Output of `M = solve_market(P, DL, config, G)`
-- `S::NamedTuple` -- NamedTuple of steady state equilibrium. Output of `S = solve_steadystate(P, DL, M, config, Guesses)`
-- `T::NamedTuple` -- NamedTuple of transition outputs. Output of `T = solve_transition(P, DL, M, S, Subsidy, config, Guesses)`
-- `config::ModelConfig` -- struct of user defined model configurations. `config = ModelConfig()`
+- `M::StructMarketOutput` -- Struct of market equilibrium. Output of `M = solve_market(P, DL, config, G)`
+- `S::StructSteadyState` -- Struct of steady state equilibrium. Output of `S = solve_steadystate(P, DL, M, config, Guesses)`
+- `T::StructTransOutput` -- Struct of transition outputs. Output of `T = solve_transition(P, DL, M, S, Subsidy, config, Guesses)`
+- `config::ModelConfig` -- Struct of user defined model configurations. `config = ModelConfig()`
 - `R::String` -- path to Results folder. `R = "path/to/Results"`
 
 ## Outputs
@@ -29,7 +28,7 @@ Model results for capital and battery price falls, renewable shares, US GDP outc
 ## Notes
 This function writes data when RunBattery==1 or RunCurtailment==1.
 """
-function writedata_battery(P::StructAllParams, M::NamedTuple, S::NamedTuple, T::NamedTuple, config::ModelConfig, R::String)
+function writedata_battery(P::StructAllParams, M::StructMarketOutput, S::StructSteadyState, T::StructTransOutput, config::ModelConfig, R::String)
     SGE_TASK_ID = Base.parse(Int, ENV["SGE_TASK_ID"])
     curtailmentswitch = P.curtailmentswitch
     hoursofstorage = config.hoursofstorage

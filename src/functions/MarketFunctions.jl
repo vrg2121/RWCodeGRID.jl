@@ -1,6 +1,6 @@
 module MarketFunctions
 
-export StructMarketEq, solve_initial_equilibrium
+export StructMarketEq, solve_initial_equilibrium, up_SShare_pKRbar_init!
 
 using DataFrames, Statistics, MAT
 using ..RegionModel, ..MarketEquilibrium
@@ -8,6 +8,10 @@ using JuMP, Ipopt
 
 import ..DataLoadsFunc: StructRWParams
 import DrawGammas: StructParams
+
+# ---------------------------------------------------------------------------- #
+#                                  Set Up Data                                 #
+# ---------------------------------------------------------------------------- #
 
 function calc_subsidyUS(p_E_init::Vector, regions::DataFrame, majorregions::DataFrame)
     p_E_weighted = Vector{Float64}(undef, 2531)
@@ -60,7 +64,7 @@ function elec_fuel_expenditure!(laboralloc::Matrix, D_init::Vector, params::Stru
     return fossilsales, Expenditure_init
 end
 
-function open_mat_var!(result_Dout_init::Matrix{Matrix{Float64}}, result_Yout_init::Matrix{Matrix{Float64}}, result_Pout_init::Matrix{Matrix{Float64}}, p_F_path_guess::Matrix{Float64}, G::String)
+function open_mat_var(G::String)
     # opening variables in mat files
     wf = matopen("$G/w_guess_mat.mat")
     w_guess = read(wf, "w_guess")
@@ -72,7 +76,7 @@ function open_mat_var!(result_Dout_init::Matrix{Matrix{Float64}}, result_Yout_in
     p_E_init = vec(p_E_init)
 
     pof = matopen("$G/Pout_guess_init.mat")
-    result_Pout_init .= read(pof, "result_Pout_init")
+    result_Pout_init = read(pof, "result_Pout_init")
     close(pof)
 
     lf = matopen("$G/laboralloc_guess.mat")
@@ -84,11 +88,11 @@ function open_mat_var!(result_Dout_init::Matrix{Matrix{Float64}}, result_Yout_in
     close(PCf)
 
     dof = matopen("$G/Dout_guess_init.mat")
-    result_Dout_init .= read(dof, "result_Dout_init")
+    result_Dout_init = read(dof, "result_Dout_init")
     close(dof)
 
     yof = matopen("$G/Yout_guess_init.mat")
-    result_Yout_init .= read(yof, "result_Yout_init")
+    result_Yout_init = read(yof, "result_Yout_init")
     close(yof)
 
     pff = matopen("$G/p_F_path_guess_saved.mat")
@@ -107,15 +111,89 @@ function open_mat_var!(result_Dout_init::Matrix{Matrix{Float64}}, result_Yout_in
     fossilsales = read(ff, "fossilsales")
     close(ff)
 
-    return w_guess, p_E_init, laboralloc, PC_guess_init, wedge, priceshifterupdate, fossilsales
+    return w_guess, p_E_init, laboralloc, PC_guess_init, wedge, priceshifterupdate, fossilsales, result_Pout_init, result_Yout_init, p_F_path_guess, result_Dout_init
 end
 
+# ---------------------------------------------------------------------------- #
+#                           Solve Market Equilibrium                           #
+# ---------------------------------------------------------------------------- #
 
-function market_setup!(rP_init::Vector, pg_init_s::Matrix, pE_market_init::Vector, 
+function solve_offgrid!(result_Dout_init::Matrix{Any}, result_Yout_init::Matrix{Any}, result_price_init::Vector{Vector}, # modified variables
+                majorregions::DataFrame, KRshifter::Vector{Float64}, YFmax::Vector{Float64}, power::Matrix{Float64}, KFshifter::Vector{Float64}, 
+                shifter::Matrix{Float64}, kk::Int64, p_F::Float64, params::StructParams)
+    
+    @inbounds for jj in 1:majorregions.n[kk]                # set up variables local to the task
+        guess = [1; KRshifter[jj]]
+        LB = [0; KRshifter[jj]]
+        UB = [10^6; YFmax[jj] + KRshifter[jj]]
+        l_guess = length(guess)
+
+        x = Vector{Float64}(undef, l_guess)
+        model = Model(Ipopt.Optimizer)
+        set_silent(model)
+        @variable(model, LB[i] <= x[i=1:l_guess] <= UB[i], start=guess[i])
+        @constraint(model, c1, x[1] - x[2] == 0) 
+        @objective(model, Min, obj2(x, power[jj], shifter[jj], KFshifter[jj], KRshifter[jj], p_F, params))
+        optimize!(model)
+
+        # record the output
+        P_out1 = value.(x) 
+
+        price = Price_Solve(P_out1, shifter[jj], 1, params)[1]
+        result_Dout_init[kk][jj] = P_out1[1]
+        result_Yout_init[kk][jj] = P_out1[2]
+        result_price_init[kk][1][1, jj] = price
+    end
+end
+
+function optimize_offgrid!(result_Dout_init::Matrix{Any}, result_Yout_init::Matrix{Any}, result_price_init::Vector{Vector}, # modified variables
+    majorregions::DataFrame, laboralloc::Matrix{Float64}, Lsector::Matrix{Float64}, params::StructParams, wage_init::Vector{Float64}, rP_init::Vector{Float64}, 
+    result_Pout_init::Matrix{Any}, pg_init_s::Matrix{Float64}, pE_market_init::Vector{Float64}, kappa::Float64,
+    regionParams::StructRWParams, KR_init_S::Matrix{Float64}, KR_init_W::Matrix{Float64}, p_F::Float64)
+
+    kk = params.N 
+
+    KRshifter, YFmax, power, KFshifter, shifter = second_loop(kk, majorregions, laboralloc, Lsector, params, wage_init, rP_init,
+                                                                            result_Pout_init, pg_init_s, pE_market_init, kappa, 
+                                                                            regionParams, KR_init_S, KR_init_W, p_F) #  311.800 μs (162 allocations: 395.20 KiB)
+    solve_offgrid!(result_Dout_init, result_Yout_init, result_price_init,
+        majorregions, KRshifter, YFmax, power, KFshifter, shifter, kk, p_F, params) # 1.245 s (1591029 allocations: 58.87 MiB)
+    #   1.572967 seconds (1.62 M allocations: 61.364 MiB, 1.97% compilation time)
+    
+end
+
+function fill_init!(p_E_init::Vector{Float64}, D_init::Vector{Float64}, YE_init::Vector{Float64}, PI_init::Vector{Float64}, # modified variables
+            N::Int64, majorregions::DataFrame, result_price_init::Vector{Vector}, result_Dout_init::Matrix{Any}, 
+            result_Yout_init::Matrix{Any}, L::Matrix{Float64})
+
+
+    @inbounds for kk=1:(N - 1)
+        ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
+        p_E_init[ind] .= result_price_init[kk]
+        D_init[ind].= result_Dout_init[kk]
+        YE_init[ind] .= result_Yout_init[kk]
+        PI_init[ind, 1] .= (sum(result_price_init[kk] .*(result_Dout_init[kk] - result_Yout_init[kk]))) .*
+                            (L[ind, 1]) ./ 
+                            (sum(L[ind, 1]))
+    end
+        
+    kk = N
+    ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
+    result_price_init[kk][1] .= clamp.(result_price_init[kk][1], 0.001, 0.3)	# put bounds on prices
+    matrix_values = result_price_init[kk][1]
+    p_E_init[ind] .= vec(matrix_values)
+    D_init[ind].= vec(result_Dout_init[kk])
+    YE_init[ind] .= vec(result_Yout_init[kk])
+    PI_init[ind, 1] .= (sum(matrix_values.*(result_Dout_init[kk] .- result_Yout_init[kk]))) .*
+                        (L[ind, 1]) ./ (sum(L[ind, 1]))
+end
+
+function market_setup!(rP_init::Vector, pg_init_s::Matrix, pE_market_init::Vector, # modified variables
     wage_init::Vector, params, p_E_init::Vector, p_F::Float64, R_LR::Float64, PC_guess_init::Matrix)
     
     # Set initial capital returns
-    rP_init .= (R_LR - 1 + params.deltaP) .* PC_guess_init
+    coef = R_LR - 1 + params.deltaP
+    rP_init .= coef .* PC_guess_init #   623.256 ns (2 allocations: 64 bytes)
 
     # Calculate final good priceshifterupdate
     pg_init_s .= (wage_init .^ (params.Vs[:, 1]' .* ones(params.J, 1))) .* 
@@ -123,58 +201,19 @@ function market_setup!(rP_init::Vector, pg_init_s::Matrix, pE_market_init::Vecto
                 ((params.kappa .+ (params.kappa .* p_F ./ p_E_init) .^ (1 - params.psi)) .^ 
                 (-(params.psi / (params.psi - 1)) .* params.Vs[:, 3]')) .* 
                 (rP_init .^ (params.Vs[:, 4]' .* ones(params.J, 1))) ./ 
-                (params.Z .* params.zsector .* params.cdc)
+                (params.Z .* params.zsector .* params.cdc) # 1.683 ms (75 allocations: 82.73 KiB)
 
     # Update pE_market_init
-    pE_market_init .= copy(p_E_init)
+    pE_market_init .= p_E_init
 
 end
 
-function optimize_region!(result_price_init::Vector, result_Dout_init::Matrix{Matrix{Float64}}, result_Yout_init::Matrix{Matrix{Float64}}, Lossfac_init::Matrix,
-	majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params,
+function optimize_region!(result_price_init::Vector, result_Dout_init::Matrix{Any}, result_Yout_init::Matrix{Any}, Lossfac_init::Matrix, # modified variables
+	majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params::StructParams,
 	wage_init::Vector, rP_init::Vector, linconscount::Int, pg_init_s::Matrix, pE_market_init::Vector, kappa::Float64,
 	p_F::Float64, regionParams::StructRWParams, KR_init_S::Matrix, KR_init_W::Matrix)
 
-    n_regions = params.N - 1
-    tasks = Vector{Task}(undef, n_regions)
-
-    # Spawn a task for each region kk.
-    for kk in 1:n_regions
-        tasks[kk] = Threads.@spawn begin
-            # Localize all data for region kk.
-            l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid =
-                data_set_up(kk, majorregions, Linecounts, RWParams, laboralloc,
-                            Lsector, params, wage_init, rP_init, pg_init_s, pE_market_init,
-                            kappa, regionParams, regionParams.KF, p_F, linconscount,
-                            KR_init_S, KR_init_W, "market")
-
-            # Solve the model for region kk.
-            P_out = solve_model(kk, l_guess, LB, UB, guess, regionParams, params,
-                                power, shifter, KFshifter, KRshifter, p_F, mid)
-
-            local_price = Price_Solve(P_out, shifter, n, params)
-            local_Dout = P_out[1:mid]
-            local_Yout = P_out[1+mid:end]
-            Pvec = local_Yout .- local_Dout
-            Losses = Pvec[2:end]' * regionParams.B[kk] * Pvec[2:end] .* params.Rweight
-            local_Lossfac = Losses ./ sum(local_Yout)
-
-            return (local_price = local_price,
-                    local_Dout  = local_Dout,
-                    local_Yout  = local_Yout,
-                    local_Lossfac = local_Lossfac)
-        end
-    end
-
-    for kk in 1:n_regions
-        result = fetch(tasks[kk])
-        @views result_price_init[kk] .= result.local_price
-        @views result_Dout_init[kk] .= result.local_Dout
-        @views result_Yout_init[kk] .= result.local_Yout
-        @views Lossfac_init[kk] = result.local_Lossfac
-    end
-
-	"""Threads.@threads :static for kk in 1:(params.N - 1)
+	Threads.@threads :static for kk in 1:(params.N - 1)
 		# the local call in this section localizes the memory to each thread to reduce crossing data 
 		# set up optimization problem for region kk
 
@@ -185,35 +224,17 @@ function optimize_region!(result_price_init::Vector, result_Dout_init::Matrix{Ma
 		# solve the model for region kk (see RegionModel.jl)
         local P_out = solve_model(kk, l_guess, LB, UB, guess, regionParams, params, power, shifter, KFshifter, KRshifter, p_F, mid)
 
-		result_price_init[kk].=Price_Solve(P_out, shifter, n, params) #.MarketEquilibrium.jl
+		result_price_init[kk] .= Price_Solve(P_out, shifter, n, params) #.MarketEquilibrium.jl
 		@views result_Dout_init[kk] .= P_out[1:mid]
 		@views result_Yout_init[kk] .= P_out[1+mid:end]
 		local Pvec = P_out[1+mid:end] .- P_out[1:mid]
 		local Losses = Pvec[2:end]' * regionParams.B[kk] * Pvec[2:end] .* params.Rweight
 		@views Lossfac_init[kk] = Losses ./ sum(result_Yout_init[kk])
 
-	end"""
-
-    """for kk in 1:(params.N - 1)
-		# set up optimization problem for region kk
-
-		l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid = data_set_up(kk, majorregions, Linecounts, RWParams, laboralloc,
-											Lsector, params, wage_init, rP_init, pg_init_s, pE_market_init, kappa, regionParams, 
-											regionParams.KF, p_F, linconscount, KR_init_S, KR_init_W, "market")
-
-		# solve the model for region kk (see RegionModel.jl)
-        P_out = solve_model(kk, l_guess, LB, UB, guess, regionParams, params, power, shifter, KFshifter, KRshifter, p_F, mid)
-
-		result_price_init[kk].=Price_Solve(P_out, shifter, n, params) #.MarketEquilibrium.jl
-		@views result_Dout_init[kk] .= P_out[1:mid]
-		@views result_Yout_init[kk] .= P_out[1+mid:end]
-		Pvec = P_out[1+mid:end] .- P_out[1:mid]
-		Losses = Pvec[2:end]' * regionParams.B[kk] * Pvec[2:end] .* params.Rweight
-		@views Lossfac_init[kk] = Losses ./ sum(result_Yout_init[kk])
-    end"""
+	end
 end
 
-function optimize_region_test!(result_price_init::Vector, result_Dout_init::Matrix{Matrix{Float64}}, result_Yout_init::Matrix{Matrix{Float64}}, Lossfac_init::Matrix,
+function optimize_region_test!(result_price_init::Vector, result_Dout_init::Matrix{Any}, result_Yout_init::Matrix{Any}, Lossfac_init::Matrix,
 	majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params::StructParams,
 	wage_init::Vector, rP_init::Vector, linconscount::Int, pg_init_s::Matrix, pE_market_init::Vector, kappa::Float64,
 	p_F::Float64, regionParams::StructRWParams, KR_init_S::Matrix, KR_init_W::Matrix, power2::Float64)
@@ -239,7 +260,6 @@ function optimize_region_test!(result_price_init::Vector, result_Dout_init::Matr
 	end
 end
 
-
 function second_loop(kk::Int, majorregions::DataFrame, laboralloc::Matrix, Lsector::Matrix, params::StructParams, 
             wage_init::Vector, rP_init::Vector, result_Pout_init::Matrix, 
             pg_init_s::Matrix, pE_market_init::Vector, kappa::Float64, 
@@ -247,7 +267,7 @@ function second_loop(kk::Int, majorregions::DataFrame, laboralloc::Matrix, Lsect
 
     YFmax = Vector{Float64}(undef, 332)
     KRshifter = Vector{Float64}(undef, 332)
-    guess = Matrix{Float64}(undef, 348, 1)
+    #guess = Matrix{Float64}(undef, 348, 1)
     power = Matrix{Float64}(undef, 332, 10)
     KFshifter = Vector{Float64}(undef, 332)
     shifter = Matrix{Float64}(undef, 332, 10)
@@ -271,7 +291,7 @@ function second_loop(kk::Int, majorregions::DataFrame, laboralloc::Matrix, Lsect
 
     #Ltotal = sum(Lshifter, dims = 2)
     Jlength::Int = majorregions.n[kk]
-    guess .= result_Pout_init[kk]
+    #guess .= result_Pout_init[kk]
 
     # define shifters for objective function
     @views pg_s .= pg_init_s[ind,:]
@@ -297,7 +317,8 @@ function second_loop(kk::Int, majorregions::DataFrame, laboralloc::Matrix, Lsect
 
     # define shifter
     #wedge_vec = wedge[ind]
-    return KRshifter, YFmax, guess, power, KFshifter, shifter
+    #return KRshifter, YFmax, guess, power, KFshifter, shifter
+    return KRshifter, YFmax, power, KFshifter, shifter
 
 end
 
@@ -308,7 +329,38 @@ function solve_KP_init!(KP_init::Vector, Lsector::Matrix, params::StructParams, 
             (params.Vs[:, 1]' .* ones(params.J, 1)) .* 
             (wage_init ./ rP_init)
     KP_init .= sum(Ksector, dims = 2)
-    return KP_init
+end
+
+function up_wages_productivity!(w_guess::Matrix{Float64}, Z::Matrix{Float64}, laboralloc::Matrix{Float64}, Lsector::Matrix{Float64}, # modified variables
+            w_update::Matrix{Float64}, updw_w::Float64, wage_init::Vector{Float64}, L::Matrix{Float64}, Xjdashs::Matrix{Float64})
+
+    relexp = Matrix{Float64}(undef, 2531, 10)
+    relab = Matrix{Float64}(undef, 2531, 10)
+
+    w_guess .= 0.1 .* w_update .+ (1 - 0.1) .* w_guess
+    Z .= Z .* clamp.(1 .+ updw_w .* (wage_init .- w_guess) ./ wage_init, 0.95, 1.05)
+
+    # update relative labor allocations
+    laboralloc .= Lsector ./ L
+
+    relab .= laboralloc ./ sum(laboralloc, dims=2)
+    relexp .= Xjdashs ./ sum(Xjdashs, dims = 2)
+
+    Lsector .= Lsector .* clamp.(1 .+ 0.05 .* (relexp .- relab), 0.9, 1.1)
+    Lsector .= Lsector ./ sum(Lsector, dims=2) .* L
+end
+
+# ---------------------------------------------------------------------------- #
+#                              Exported Functions                              #
+# ---------------------------------------------------------------------------- #
+
+function up_SShare_pKRbar_init!(SShare_init::Matrix{Float64}, p_KR_bar_init::Matrix{Float64}, # modified variables
+        thetaS::Matrix{Float64}, p_KR_init_S::Float64, varrho::Float64, thetaW::Matrix{Float64}, p_KR_init_W::Float64)
+    
+    @inbounds for i = 1:2531
+        SShare_init[i] = (thetaS[i] / p_KR_init_S) ^ varrho / ((thetaS[i] / p_KR_init_S) ^ varrho + (thetaW[i] / p_KR_init_W) ^ varrho)
+        p_KR_bar_init[i] = SShare_init[i] * p_KR_init_S + (1 - SShare_init[i]) * p_KR_init_W
+    end
 end
 
 
@@ -332,7 +384,7 @@ mutable struct StructMarketEq
     wedge::Matrix{Float64}
     priceshifterupdate::Matrix{Float64}
     fossilsales::Matrix{Float64}
-    P_out::Vector{Float64}
+    #P_out::Vector{Float64}
     Expenditure_init::Vector{Float64}
     rP_init::Vector{Float64}
     PI_init::Vector{Float64}
@@ -347,7 +399,7 @@ end
 function solve_initial_equilibrium(params::StructParams, wage_init::Vector{Float64}, majorregions::DataFrame,
     regionParams::StructRWParams, KR_init_S::Matrix{Float64}, KR_init_W::Matrix{Float64}, R_LR::Float64, sectoralempshares::Matrix{Union{Float64, Missing}},
     Linecounts::DataFrame, kappa::Float64, regions::DataFrame, linconscount::Int, updw_w::Float64, upw_z::Float64, RWParams::StructRWParams, G::String)
-    
+
     # allocations for variables
     sizes = [727, 755, 30, 53, 13, 15, 46, 11, 26, 78, 125, 320, 332]
     result_price_init = [Vector{Float64}(undef, size) for size in sizes[1:end-1]]
@@ -361,148 +413,73 @@ function solve_initial_equilibrium(params::StructParams, wage_init::Vector{Float
     Lossfac_init = Matrix{Float64}(undef, 1, 12)
     D_init = Vector{Float64}(undef, 2531)
     YE_init = Vector{Float64}(undef, 2531)
-    relexp = Matrix{Float64}(undef, 2531, 10)
-    relab = Matrix{Float64}(undef, 2531, 10)
     FUtilization = Vector{Float64}(undef, 2531)	
     Expenditure_init = Vector{Float64}(undef, 2531)
     Lsector = Matrix{Float64}(undef, 2531, 10)
-
-    result_Dout_init = Array{Matrix{Float64}}(undef, 1, 13)
-    result_Yout_init = Array{Matrix{Float64}}(undef, 1, 13)
-    result_Pout_init = Array{Matrix{Float64}}(undef, 1, 13)
     p_F_path_guess = Matrix{Float64}(undef, 1, 501)
+    W_Real = Vector{Float64}(undef, 2531)
+    PC_init = Vector{Float64}(undef, 2531)
 
-    P_out = Vector{Float64}(undef, 2)
+    YF_init = Vector{Float64}(undef, 2531)
+    PI_init = Vector{Float64}(undef, 2531)
+    KP_init = Vector{Float64}(undef, 2531)
 
     # load variable guesses
-    w_guess, p_E_init, laboralloc, PC_guess_init, 
-    wedge, priceshifterupdate, fossilsales = open_mat_var!(result_Dout_init, result_Yout_init, result_Pout_init, p_F_path_guess, G)
+    p_F = 0.05 # initial fossil sales guess
+    subsidy_US = 0.0
 
-    # initial fossil sales guess
-    p_F = 0.05
-
+    w_guess, p_E_init, laboralloc, PC_guess_init, wedge, priceshifterupdate, fossilsales, result_Pout_init, result_Yout_init, p_F_path_guess, result_Dout_init = open_mat_var(G)
     Lsector .= laboralloc .* params.L
-
-    diffend=1
-
-    power2 = 1 / params.alpha1
+    
+    diffend = 1
 
     while diffend>10^(-2)
-        YF_init = Vector{Float64}(undef, 2531)
-        PI_init = Vector{Float64}(undef, 2531)
-        KP_init = Vector{Float64}(undef, 2531)
-        
 
         # optimization for each region kk
-        market_setup!(rP_init, pg_init_s, pE_market_init, wage_init, params, p_E_init, p_F, R_LR, PC_guess_init)
+        market_setup!(rP_init, pg_init_s, pE_market_init, wage_init, params, p_E_init, p_F, R_LR, PC_guess_init) #   1.683 ms (13 allocations: 80.14 KiB)
 
         optimize_region!(result_price_init, result_Dout_init, result_Yout_init, Lossfac_init, majorregions, Linecounts, RWParams, laboralloc,
                             Lsector, params, wage_init, rP_init, linconscount, pg_init_s, pE_market_init, kappa, p_F, regionParams, KR_init_S,
-                            KR_init_W);
+                            KR_init_W); #   17.706 s (3528432 allocations: 1.07 GiB)
 
         # solve market equilibrium
-        kk = params.N #13
 
-        KRshifter, YFmax, guess, power, KFshifter, shifter = second_loop(kk, majorregions, laboralloc, Lsector, params, wage_init, rP_init,
-                                                                                result_Pout_init, pg_init_s, pE_market_init, kappa, 
-                                                                                regionParams, KR_init_S, KR_init_W, p_F)
+        optimize_offgrid!(result_Dout_init, result_Yout_init, result_price_init, # modified variables
+            majorregions, laboralloc, Lsector, params, wage_init, rP_init, result_Pout_init, pg_init_s, pE_market_init, kappa,
+            regionParams, KR_init_S, KR_init_W, p_F); #    1.386 s (1591190 allocations: 59.26 MiB)
 
-
-        
-        for jj in 1:majorregions.n[kk]                # set up variables local to the task
-            guess = [1; KRshifter[jj]]
-            LB = [0; KRshifter[jj]]
-            UB = [10^6; YFmax[jj] + KRshifter[jj]]
-            l_guess = length(guess)
-
-            x = Vector{Float64}(undef, l_guess)
-            model = Model(Ipopt.Optimizer)
-            set_silent(model)
-            @variable(model, LB[i] <= x[i=1:l_guess] <= UB[i], start=guess[i])
-            @constraint(model, c1, x[1] - x[2] == 0) 
-            @objective(model, Min, obj2(x, power[jj], shifter[jj], KFshifter[jj], KRshifter[jj], p_F, params))
-            optimize!(model)
-
-            # record the output
-            P_out1 = value.(x) 
-
-            price = Price_Solve(P_out1, shifter[jj], 1, params)[1]
-            result_Dout_init[kk][jj] = P_out1[1]
-            result_Yout_init[kk][jj] = P_out1[2]
-            result_price_init[kk][1][1, jj] = price
-        end
-
-
-        for kk=1:(params.N - 1)
-            ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
-            p_E_init[ind] .= result_price_init[kk]
-            @views D_init[ind].= result_Dout_init[kk]
-            @views YE_init[ind] .= result_Yout_init[kk]
-            @views PI_init[ind, 1] .= (sum(result_price_init[kk] .*(result_Dout_init[kk] - result_Yout_init[kk]))) .*
-                                (params.L[ind, 1]) ./ 
-                                (sum(params.L[ind, 1]))
-        end
-            
-        kk = params.N
-        ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
-        result_price_init[kk][1] .= clamp.(result_price_init[kk][1], 0.001, 0.3)	# put bounds on prices
-        matrix_values = result_price_init[kk][1]
-        p_E_init[ind] .= vec(matrix_values)
-        @views D_init[ind].= vec(result_Dout_init[kk])
-        @views YE_init[ind] .= vec(result_Yout_init[kk])
-        @views PI_init[ind, 1] .= (sum(matrix_values.*(result_Dout_init[kk] .- result_Yout_init[kk]))) .*
-                            (params.L[ind, 1]) ./
-                            (sum(params.L[ind, 1]))
-            
-
-
-
-        #global PI_init = map(y -> let x = round(y; digits=6); x == -0.0 ? 0.0 : x end, PI_init)
-        global PI_init
+        fill_init!(p_E_init, D_init, YE_init, PI_init, # modified variables
+            params.N, majorregions, result_price_init, result_Dout_init, result_Yout_init, params.L); #   22.900 μs (324 allocations: 50.86 KiB)
 
         # get capital vec
-        global KP_init = solve_KP_init!(KP_init, Lsector, params, wage_init, rP_init)
+        solve_KP_init!(KP_init, Lsector, params, wage_init, rP_init);
         
         # solve wages and calculate productivity
-        w_guess
-        fossilsales
+        w_update, WR, Incomefactor, PC, Xjdashs = wage_update_ms(w_guess, p_E_init, p_E_init, p_F, D_init, YE_init, rP_init, KP_init, PI_init, fossilsales, params);
 
-        w_update, W_Real, Incomefactor, PC_init, Xjdashs = wage_update_ms(w_guess,p_E_init,p_E_init, p_F, D_init, YE_init,rP_init,KP_init,PI_init, fossilsales, params)
+        W_Real .= WR
+        PC_init .= PC
 
-        global W_Real
-        global PC_init
+        up_wages_productivity!(w_guess, params.Z, laboralloc, Lsector, w_update, updw_w, wage_init, params.L, Xjdashs); #   107.000 μs (22 allocations: 455.41 KiB)
 
-        w_guess .= 0.1 .* w_update .+ (1 - 0.1) .* w_guess
-        params.Z .= params.Z .* clamp.(1 .+ updw_w .* (wage_init .- w_guess) ./ wage_init, 0.95, 1.05)
-        diff_w = maximum(abs.(wage_init .- w_guess) ./ wage_init)
-        diffend = maximum(diff_w)
-        #diffsec = maximum(abs.(sectoralempshares[:, 2:end] .- laboralloc[:, 1:end]), dims=1)
-        #diff_w2 = maximum(abs.(w_update .- w_guess) ./ w_update)
-
-        # update relative labor allocations
-        laboralloc .= Lsector ./ params.L
-        relab .= laboralloc ./ sum(laboralloc, dims=2)
-        relexp .= Xjdashs ./ sum(Xjdashs, dims = 2)
-        Lsector .= Lsector .* clamp.(1 .+ 0.05 .* (relexp .- relab), 0.9, 1.1)
-        Lsector .= Lsector ./ sum(Lsector, dims=2) .* params.L
+        diffend = maximum(abs.(wage_init .- w_guess) ./ wage_init)
 
         # calibrate sectoral params.Z to move sectoral emp closer
-        params.zsector[:, :] .= params.zsector[:, :] .* clamp.(1 .+ upw_z .* (sectoralempshares[:, 2:end] .- laboralloc[:, :]), 0.99, 1.01)
+        params.zsector[:, :] .= params.zsector[:, :] .* clamp.(1 .+ upw_z .* (sectoralempshares[:, 2:end] .- laboralloc[:, :]), 0.99, 1.01); #   113.900 μs (22 allocations: 618.80 KiB)
 
         # Update consumption price guess
-        PC_guess_init .= 0.2 .* PC_init .+ (1 - 0.2) .* PC_guess_init
+        PC_guess_init .= 0.2 .* PC_init .+ (1 - 0.2) .* PC_guess_init #  1.690 μs (6 allocations: 224 bytes)
 
         # get fossil fuel usage in the initial steady state
-        global @. YF_init = YE_init - regionParams.thetaS * KR_init_S - regionParams.thetaW * KR_init_W
-        FUtilization .= YF_init ./ regionParams.maxF
-        #mean(FUtilization[1:majorregions[1, :n]])
+        @. YF_init = YE_init - regionParams.thetaS * KR_init_S - regionParams.thetaW * KR_init_W #   3.067 μs (8 allocations: 288 bytes)
+        FUtilization .= YF_init ./ regionParams.maxF #  1.360 μs (2 allocations: 64 bytes)
 
         # calibrate efficiency wedges costs to match initial power prices across countries
         # set subsidy amount for transition
-        global subsidy_US = calc_subsidyUS(p_E_init, regions, majorregions) 
+        subsidy_US = calc_subsidyUS(p_E_init, regions, majorregions)  # 108.700 μs (349 allocations: 109.13 KiB)
 
         fossilsales, Expenditure_init = elec_fuel_expenditure!(laboralloc, D_init, params, p_E_init, p_F, YF_init, regionParams,
-                                                                        wage_init, rP_init, KP_init, fossilsales, YE_init, regions, PI_init)
+                                                                wage_init, rP_init, KP_init, fossilsales, YE_init, regions, PI_init);
 
         println("diffend = ", diffend)
     end
@@ -527,7 +504,7 @@ function solve_initial_equilibrium(params::StructParams, wage_init::Vector{Float
         wedge,
         priceshifterupdate,
         fossilsales,
-        P_out,
+        #P_out,
         Expenditure_init,
         rP_init,
         PI_init,
@@ -539,6 +516,75 @@ function solve_initial_equilibrium(params::StructParams, wage_init::Vector{Float
         subsidy_US
     )
 end
+
+# ---------------------------------------------------------------------------- #
+#                                   Addendum                                   #
+# ---------------------------------------------------------------------------- #
+"""n_regions = params.N - 1
+tasks = Vector{Task}(undef, n_regions)
+
+# Spawn a task for each region kk.
+for kk in 1:n_regions
+    tasks[kk] = Threads.@spawn begin
+        # Localize all data for region kk.
+        l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid =
+            data_set_up(kk, majorregions, Linecounts, RWParams, laboralloc,
+                        Lsector, params, wage_init, rP_init, pg_init_s, pE_market_init,
+                        kappa, regionParams, regionParams.KF, p_F, linconscount,
+                        KR_init_S, KR_init_W, "market")
+
+        # Solve the model for region kk.
+        P_out = solve_model(kk, l_guess, LB, UB, guess, regionParams, params,
+                            power, shifter, KFshifter, KRshifter, p_F, mid)
+
+        local_price = Price_Solve(P_out, shifter, n, params)
+        local_Dout = P_out[1:mid]
+        local_Yout = P_out[1+mid:end]
+        Pvec = local_Yout .- local_Dout
+        Losses = Pvec[2:end]' * regionParams.B[kk] * Pvec[2:end] .* params.Rweight
+        local_Lossfac = Losses ./ sum(local_Yout)
+
+        return (local_price = local_price,
+                local_Dout  = local_Dout,
+                local_Yout  = local_Yout,
+                local_Lossfac = local_Lossfac)
+    end
+end
+
+for kk in 1:n_regions
+    result = fetch(tasks[kk])
+    @views result_price_init[kk] .= result.local_price
+    @views result_Dout_init[kk] .= result.local_Dout
+    @views result_Yout_init[kk] .= result.local_Yout
+    @views Lossfac_init[kk] = result.local_Lossfac
+end"""
+
+
+"""for kk in 1:(params.N - 1)
+    # set up optimization problem for region kk
+
+    l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid = data_set_up(kk, majorregions, Linecounts, RWParams, laboralloc,
+                                        Lsector, params, wage_init, rP_init, pg_init_s, pE_market_init, kappa, regionParams, 
+                                        regionParams.KF, p_F, linconscount, KR_init_S, KR_init_W, "market")
+
+    # solve the model for region kk (see RegionModel.jl)
+    P_out = solve_model(kk, l_guess, LB, UB, guess, regionParams, params, power, shifter, KFshifter, KRshifter, p_F, mid)
+
+    result_price_init[kk].=Price_Solve(P_out, shifter, n, params) #.MarketEquilibrium.jl
+    @views result_Dout_init[kk] .= P_out[1:mid]
+    @views result_Yout_init[kk] .= P_out[1+mid:end]
+    Pvec = P_out[1+mid:end] .- P_out[1:mid]
+    Losses = Pvec[2:end]' * regionParams.B[kk] * Pvec[2:end] .* params.Rweight
+    @views Lossfac_init[kk] = Losses ./ sum(result_Yout_init[kk])
+end"""
+
+# ----------------------------- Unused Variables ----------------------------- #
+#diffsec = maximum(abs.(sectoralempshares[:, 2:end] .- laboralloc[:, 1:end]), dims=1)
+#diff_w2 = maximum(abs.(w_update .- w_guess) ./ w_update)
+#mean(FUtilization[1:majorregions[1, :n]])
+#P_out = Vector{Float64}(undef, 2)
+#power2 = 1 / params.alpha1
+
 
 
 end

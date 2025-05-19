@@ -9,13 +9,13 @@ import Random: Random
 import DataFrames: DataFrame
 import MAT: matwrite
 
+# import structs
+
 import DrawGammas: StructAllParams
 import ..DataLoads: StructAllData
 import ..Market: StructMarketOutput
 import ..SteadyState: StructSteadyState
 import ..ModelConfiguration: ModelConfig
-
-# import parameters, data and variables
 
 export solve_transition, StructTransOutput
 
@@ -120,12 +120,12 @@ function solve_transition(P::StructAllParams, DL::StructAllData, M::StructMarket
 
     # save the path for the price of capital
 
-    for kk in 1:P.params.N
+    @inbounds for kk in 1:P.params.N
         ind = P.majorregions.rowid2[kk]:P.majorregions.rowid[kk]
         @views renewshare_path_region[kk, :] = (1 .- sum(transeq.YF_path[ind, :], dims=1) ./ sum(transeq.Y_path[ind, :], dims=1))'
     end
         
-    for kk = 1:P.params.N
+    @inbounds for kk = 1:P.params.N
         ind = P.majorregions.rowid2[kk]:P.majorregions.rowid[kk]
         @views renewshare_path_region2[kk, :] = (1 .- sum(transeq.YR_path[ind, :], dims=1) ./ sum(transeq.Y_path[ind, :], dims=1))'  # uses power path
     end

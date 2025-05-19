@@ -1,7 +1,5 @@
 module RWModel
-export greet, run_model, ModelConfig
-
-greet() = print("RWModel is working!")
+export run_model, ModelConfig
 
 # ---------------------------------------------------------------------------- #
 #                         Import all Relevant Functions                        #
@@ -12,8 +10,6 @@ include("./ModelConfiguration.jl")
 import .ModelConfiguration: ModelConfig
 
 # load struct for model Params
-#import Pkg
-#Pkg.add("./DrawGammas")
 using DrawGammas #StructAllParams, StructParams
 
 # Load Data
@@ -64,7 +60,9 @@ import .TransitionExog: solve_transition_exog
 include("./WriteDataExog.jl")
 import .WriteDataExog: writedata_exog
 
-function run_model(config::ModelConfig, D::String, G::String, R::String, P::StructAllParams)
+
+
+#function run_model(config::ModelConfig, D::String, G::String, R::String, P::StructAllParams)
 
     # ---------------------------------------------------------------------------- #
     #                                  Data Loads                                  #
@@ -87,7 +85,7 @@ function run_model(config::ModelConfig, D::String, G::String, R::String, P::Stru
     # ---------------------------------------------------------------------------- #
 
     println("Solving initial long run equilibrium...")
-    S = solve_steadystate(P, DL, M, config, G)
+    S = solve_steadystate(P, DL, M, config, G);
 
     # ---------------------------------------------------------------------------- #
     #                           Run Transitional Dynamics                          #
@@ -183,7 +181,7 @@ function run_model(config::ModelConfig, D::String, G::String, R::String, P::Stru
     end
 
 
-end
+#end
 
 
 end # module RWModel

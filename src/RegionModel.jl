@@ -169,7 +169,7 @@ function add_model_variable(model::Model, LB::Vector, l_guess::Int, UB::Vector, 
     return @variable(model, LB[i] <= x[i=1:l_guess] <= UB[i], start=guess[i])
 end
 
-function add_model_constraint(model::Model, regionParams, params::StructParams, kk::Int, mid::Int)
+function add_model_constraint(model::Model, regionParams::StructRWParams, params::StructParams, kk::Int, mid::Int)
     x = model[:x]
     Pvec = @expression(model, x[mid+1:end] .- x[1:mid])
     sPvec = @expression(model, sum(Pvec))
@@ -185,24 +185,9 @@ function add_model_objective(model::Model, power::Matrix, shifter::Matrix, KFshi
     @objective(model, Min, obj(x, power, shifter, KFshifter, KRshifter, p_F, params))
 end
 
-function add_model_objective_test(model::Model, power::Matrix, shifter::Matrix, KFshifter::Union{Vector, SubArray}, 
-            KRshifter::Vector, p_F::Union{Float64, Vector, Int}, params::StructParams, mid::Int, power2::Float64)
-    local x = model[:x]
-    local Dsec = @expression(model, x[1:mid] .* ones(1, params.I))
-    local Yvec = @expression(model, x[1+mid:end])
-    local value1 = @expression(model, sum((-(Dsec .^ power) .* shifter), dims=2))
-    local svalue1 = @expression(model, sum(value1))
-    local value2 = @expression(model, p_F .* ((Yvec .- KRshifter) ./ KFshifter .^ params.alpha2) .^ power2)
-    local svalue2 = @expression(model, sum(value2))
-    local svalue1 += svalue2
-
-    return @objective(model, Min, svalue1)
-    
-end
-
 function solve_model(kk::Int, l_guess::Int, LB::Vector, UB::Vector, guess::Union{Vector, Matrix}, regionParams::StructRWParams, params::StructParams, power::Matrix, 
     shifter::Matrix, KFshifter::Union{SubArray, Vector}, KRshifter::Vector, p_F::Union{Float64, Vector, Int}, mid::Int)
-    println("solving the model for region $kk")
+    #println("solving the model for region $kk")
     model = Model(Ipopt.Optimizer)
     set_silent(model)
     add_model_variable(model, LB, l_guess, UB, guess)

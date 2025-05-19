@@ -83,7 +83,6 @@ Struct containing steady-state levels of GDP, wages, labor, capital, electricity
 Updates some guesses when hours of storage = 0.
 """
 function solve_steadystate(P::StructAllParams, D::StructAllData, M::StructMarketOutput, config::ModelConfig, G::String)
-
     pB_shifter = P.pB_shifter
     if config.RunBatteries == 1
         pB_shifter = P.pkwh_B / P.pkw_solar
@@ -111,69 +110,37 @@ function solve_steadystate(P::StructAllParams, D::StructAllData, M::StructMarket
     println("Steady State diffK= ", sseq.diffK)
     println("Steady State diffp= ", sseq.diffp)
 
+    # -------------------------- Pre-allocate Variables -------------------------- #
+    wr = Vector{Float64}(undef, 2531)
+    e2_LR = Matrix{Float64}(undef, 2531, 10)
+    fusage_ind_LR = Matrix{Float64}(undef, 2531, 1)
+    wagechange = Matrix{Float64}(undef, 2531, 2)
+    welfare_fossilchange = Matrix{Float64}(undef, 2531, 1)
 
-
-    # Get fossil fuel usage in the initial steady state
-    #YF_LR = max.(sseq.YE_LR .- D.regionParams.theta .* sseq.KR_LR, 0)
-    FUtilization = sseq.YF_LR ./ sseq.KF_LR
-    #mean(FUtilization[1:P.majorregions.n[1]]))
 
     # Compute electricity and fossil fuel usage in industry and electricity sectors
-    e2_LR = M.mrkteq.laboralloc .* repeat(sseq.D_LR, 1, P.params.I) .* (repeat(P.params.Vs[:,2]', P.params.J, 1) ./ (repeat(P.params.Vs[:,2]', P.params.J, 1) + repeat(P.params.Vs[:,3]', P.params.J, 1)))
-    fusage_ind_LR = sum(e2_LR, dims=2) .* (sseq.p_E_LR / sseq.p_F_LR) .^ P.params.psi
-    fusage_power_LR = (sseq.YF_LR ./ sseq.KF_LR .^ P.params.alpha2) .^ (1 / P.params.alpha1)
-    fusage_total_LR = sum(fusage_power_LR) + sum(fusage_ind_LR)
-
+    up_e2_LR!(e2_LR, P.params.Vs, M.mrkteq.laboralloc, sseq.D_LR) # 57.200 μs (22 allocations: 198.88 KiB)
+    fusage_ind_LR .= sum(e2_LR, dims=2) .* sseq.p_E_LR .^ P.params.psi #    53.600 μs (11 allocations: 20.08 KiB)
+   
     # compute fossil usage as a share of GDP
-    GDP = sum(sseq.w_LR .* P.params.L .+ sseq.p_E_LR .* sseq.D_LR .+ sseq.rP_LR .* sseq.KP_LR .+ sseq.p_F_LR .* fusage_ind_LR)
-    Fossshare = sum(sseq.p_F_LR .* fusage_ind_LR) / GDP
+    GDP = sum(sseq.w_LR .* P.params.L .+ sseq.p_E_LR .* sseq.D_LR .+ sseq.rP_LR .* sseq.KP_LR .+ sseq.p_F_LR .* fusage_ind_LR) #   7.360 μs (18 allocations: 20.52 KiB)
 
-    # Save long run variables for transition
-    I_tota_S_LR = copy(sseq.Depreciation_LR_S)
-    I_tota_W_LR = copy(sseq.Depreciation_LR_W)
+    M.wageresults[:,2] = sseq.w_real #   2.300 μs (1 allocation: 16 bytes)    
+    fill_wr!(wr, M.wageresults) #   3.925 μs (0 allocations: 0 bytes)
 
-    KR_LR_S = sseq.KR_LR_S
-    KR_LR_W = sseq.KR_LR_W
-    p_E_LR = sseq.p_E_LR
-    w_LR = sseq.w_LR
-    result_Dout_LR = sseq.result_Dout_LR
-    result_Yout_LR = sseq.result_Yout_LR
-    PC_guess_LR = sseq.PC_guess_LR
-    laboralloc_LR = sseq.laboralloc_LR
+    wagechange[:, 1] .= wr
+    wagechange[:, 2] .= P.regions.csr_id
 
-    if config.hoursofstorage == 0
-        matwrite("$G/alloc_LR_guess.mat", Dict("laboralloc_LR" => laboralloc_LR))
-        matwrite("$G/KR_LR_S_guess.mat", Dict("KR_LR_S" => KR_LR_S))
-        matwrite("$G/KR_LR_W_guess.mat", Dict("KR_LR_W" => KR_LR_W))
-        matwrite("$G/p_E_LR_guess.mat", Dict("p_E_LR" => p_E_LR))
-        matwrite("$G/w_LR_guess.mat", Dict("w_LR" => w_LR))
-        matwrite("$G/Dout_guess_LR.mat", Dict("result_Dout_LR" => result_Dout_LR))
-        matwrite("$G/Yout_guess_LR.mat", Dict("result_Yout_LR" => result_Yout_LR))
-        matwrite("$G/PC_guess_LR.mat", Dict("PC_guess_LR" => PC_guess_LR))
-    end
-
-
-    M.wageresults[:,2] = sseq.w_real
-    wr = (M.wageresults[:, 2] ./ M.wageresults[:, 1]) .- 1
-    wagechange = [wr P.regions.csr_id]
-
-    priceresults_LR = sseq.p_E_LR
 
     # Get changes in welfare from the different components
-    welfare_wagechange = (log.(sseq.w_LR ./ sseq.PC_guess_LR) .- log.(D.wage_init ./ M.mrkteq.PC_guess_init)) .* (D.wage_init .* P.params.L ./ M.mrkteq.Expenditure_init)
-    welfare_capitalchange = (log.(sseq.KP_LR ./ sseq.PC_guess_LR) .- log.(M.mrkteq.KP_init ./ M.mrkteq.PC_guess_init)) .* (M.mrkteq.rP_init .* M.mrkteq.KP_init ./ M.mrkteq.Expenditure_init)
+    welfare_wagechange = (log.(sseq.w_LR ./ sseq.PC_guess_LR) .- log.(D.wage_init ./ M.mrkteq.PC_guess_init)) .* (D.wage_init .* P.params.L ./ M.mrkteq.Expenditure_init) #   50.200 μs (18 allocations: 20.45 KiB)
+    welfare_capitalchange = (log.(sseq.KP_LR ./ sseq.PC_guess_LR) .- log.(M.mrkteq.KP_init ./ M.mrkteq.PC_guess_init)) .* (M.mrkteq.rP_init .* M.mrkteq.KP_init ./ M.mrkteq.Expenditure_init) #   48.400 μs (18 allocations: 20.45 KiB)
 
     welfare_electricitychange = (log.((D.R_LR .* sseq.KR_LR .* sseq.p_KR_bar_LR .* sseq.PC_LR + D.R_LR .* sseq.KF_LR .* sseq.PC_LR) ./ sseq.PC_LR) .- 
         log.((D.R_LR .* (D.KR_init_W + D.KR_init_S) .* M.p_KR_bar_init .* M.mrkteq.PC_init + D.R_LR .* M.KF_init .* M.mrkteq.PC_init))) .* 
-        ((1 - P.params.beta) * (D.R_LR .* (D.KR_init_W + D.KR_init_S) .* M.p_KR_bar_init .* M.mrkteq.PC_init + D.R_LR .* M.KF_init .* M.mrkteq.PC_init) ./ M.mrkteq.Expenditure_init)
+        ((1 - P.params.beta) * (D.R_LR .* (D.KR_init_W + D.KR_init_S) .* M.p_KR_bar_init .* M.mrkteq.PC_init + D.R_LR .* M.KF_init .* M.mrkteq.PC_init) ./ M.mrkteq.Expenditure_init) #   93.000 μs (76 allocations: 259.70 KiB)
 
-    welfare_fossilchange = -M.mrkteq.fossilsales ./ M.mrkteq.Expenditure_init
-
-    # Get changes in manufacturing share
-    comparativeadvantagechange = M.laboralloc_init ./ sseq.laboralloc_LR
-
-    w_real_LR = sseq.w_LR ./ sseq.PC_guess_LR
-    GDP_ind_LR = (sseq.w_LR .* P.params.L .+ sseq.p_E_LR .* sseq.D_LR .+ sseq.rP_LR .* sseq.KP_LR .+ sseq.p_F_LR .* fusage_ind_LR) ./ sseq.PC_guess_LR
+    welfare_fossilchange .= -M.mrkteq.fossilsales ./ M.mrkteq.Expenditure_init #   8.800 μs (6 allocations: 39.78 KiB)
 
     return StructSteadyState(
     sseq,
@@ -188,5 +155,52 @@ function solve_steadystate(P::StructAllParams, D::StructAllData, M::StructMarket
     )
 
 end
+
+"""
+    KR_LR_S = sseq.KR_LR_S
+    KR_LR_W = sseq.KR_LR_W
+    p_E_LR = sseq.p_E_LR
+    w_LR = sseq.w_LR
+    result_Dout_LR = sseq.result_Dout_LR
+    result_Yout_LR = sseq.result_Yout_LR
+    PC_guess_LR = sseq.PC_guess_LR
+    laboralloc_LR = sseq.laboralloc_LR
+
+    # this is a problem for parallelized computation if the mat files are being used later
+    # i also don't see why it's necessary since steadystate is only solved once
+
+    if config.hoursofstorage == 0
+        matwrite("G/alloc_LR_guess.mat", Dict("laboralloc_LR" => laboralloc_LR))
+        matwrite("G/KR_LR_S_guess.mat", Dict("KR_LR_S" => KR_LR_S))
+        matwrite("G/KR_LR_W_guess.mat", Dict("KR_LR_W" => KR_LR_W))
+        matwrite("G/p_E_LR_guess.mat", Dict("p_E_LR" => p_E_LR))
+        matwrite("G/w_LR_guess.mat", Dict("w_LR" => w_LR))
+        matwrite("G/Dout_guess_LR.mat", Dict("result_Dout_LR" => result_Dout_LR))
+        matwrite("G/Yout_guess_LR.mat", Dict("result_Yout_LR" => result_Yout_LR))
+        matwrite("G/PC_guess_LR.mat", Dict("PC_guess_LR" => PC_guess_LR))
+    end
+"""
+
+# ----------------------------- Unused Variables ----------------------------- #
+# Get fossil fuel usage in the initial steady state
+#YF_LR = max.(sseq.YE_LR .- D.regionParams.theta .* sseq.KR_LR, 0)
+#FUtilization = sseq.YF_LR ./ sseq.KF_LR
+#mean(FUtilization[1:P.majorregions.n[1]]))
+
+#fusage_power_LR = (sseq.YF_LR ./ sseq.KF_LR .^ P.params.alpha2) .^ (1 / P.params.alpha1)
+#fusage_total_LR = sum(fusage_power_LR) + sum(fusage_ind_LR)
+#Fossshare = sum(sseq.p_F_LR .* fusage_ind_LR) / GDP
+
+# Save long run variables for transition
+#I_tota_S_LR = copy(sseq.Depreciation_LR_S)
+#I_tota_W_LR = copy(sseq.Depreciation_LR_W)
+
+#priceresults_LR = sseq.p_E_LR
+
+# Get changes in manufacturing share
+#comparativeadvantagechange = M.laboralloc_init ./ sseq.laboralloc_LR
+
+#w_real_LR = sseq.w_LR ./ sseq.PC_guess_LR
+#GDP_ind_LR = (sseq.w_LR .* P.params.L .+ sseq.p_E_LR .* sseq.D_LR .+ sseq.rP_LR .* sseq.KP_LR .+ sseq.p_F_LR .* fusage_ind_LR) ./ sseq.PC_guess_LR
 
 end

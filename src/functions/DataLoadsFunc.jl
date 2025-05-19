@@ -153,38 +153,38 @@ function create_RWParams!(RWParams::StructRWParams, majorregions_all::DataFrame,
     RWParams.Gam3[1][RWParams.Gam3[1] .> indmin] .= 0
 
     # fill the rest of A, Adash, O in a for loop
-    for jj in 2:(size(majorregions_all, 1)-1)
-    #stringer = "$D/ModelDataset/Kmatrix_$(jj).csv"
-    #stringer2 = "$D/ModelDataset/Omatrix_$(jj).csv"
-    #Kmatrix = Matrix(CSV.File(stringer) |> DataFrame)
-    Kmatrix = CSV.File("$D/ModelDataset/Kmatrix_$(jj).csv") |> Tables.matrix
-    Kmatrix = Kmatrix[:, majorregions_all.rowid[jj-1] + 2 : majorregions_all.rowid[jj]]
+    @inbounds for jj in 2:(size(majorregions_all, 1)-1)
+        #stringer = "$D/ModelDataset/Kmatrix_$(jj).csv"
+        #stringer2 = "$D/ModelDataset/Omatrix_$(jj).csv"
+        #Kmatrix = Matrix(CSV.File(stringer) |> DataFrame)
+        Kmatrix = CSV.File("$D/ModelDataset/Kmatrix_$(jj).csv") |> Tables.matrix
+        Kmatrix = Kmatrix[:, majorregions_all.rowid[jj-1] + 2 : majorregions_all.rowid[jj]]
 
-    #Omatrix = Matrix(CSV.File(stringer2, drop=[1]) |> DataFrame)
-    Omatrix = CSV.File("$D/ModelDataset/Omatrix_$(jj).csv", drop=[1]) |> Tables.matrix
-    RWParams.A[jj] .= Matshifter(Kmatrix)
-    RWParams.Adash[jj] .= Matshifter(Kmatrix)
-    Omatrix = Vector(Omatrix[:,1])
-    RWParams.O[jj] .= Diagonal(Omatrix)
-    RWParams.Gam[jj] .= RWParams.O[jj]^(-1) * RWParams.A[jj] * inv(RWParams.A[jj]' * RWParams.O[jj]^(-1) * RWParams.A[jj])
-
-
-    indmax =  repeat(maximum(RWParams.Gam[jj], dims=2), 1, majorregions_all.n[jj] - 1)
-    RWParams.Gam2[jj] .= RWParams.Gam[jj]
-    RWParams.Gam2[jj][RWParams.Gam[jj] .< indmax] .= 0
+        #Omatrix = Matrix(CSV.File(stringer2, drop=[1]) |> DataFrame)
+        Omatrix = CSV.File("$D/ModelDataset/Omatrix_$(jj).csv", drop=[1]) |> Tables.matrix
+        RWParams.A[jj] .= Matshifter(Kmatrix)
+        RWParams.Adash[jj] .= Matshifter(Kmatrix)
+        Omatrix = Vector(Omatrix[:,1])
+        RWParams.O[jj] .= Diagonal(Omatrix)
+        RWParams.Gam[jj] .= RWParams.O[jj]^(-1) * RWParams.A[jj] * inv(RWParams.A[jj]' * RWParams.O[jj]^(-1) * RWParams.A[jj])
 
 
-    indmin = repeat(minimum(RWParams.Gam[jj], dims=2), 1, majorregions_all.n[jj] - 1)
-    RWParams.Gam3[jj] .= RWParams.Gam[jj]
-    RWParams.Gam3[jj][RWParams.Gam3[jj] .> indmin] .= 0   
+        indmax =  repeat(maximum(RWParams.Gam[jj], dims=2), 1, majorregions_all.n[jj] - 1)
+        RWParams.Gam2[jj] .= RWParams.Gam[jj]
+        RWParams.Gam2[jj][RWParams.Gam[jj] .< indmax] .= 0
+
+
+        indmin = repeat(minimum(RWParams.Gam[jj], dims=2), 1, majorregions_all.n[jj] - 1)
+        RWParams.Gam3[jj] .= RWParams.Gam[jj]
+        RWParams.Gam3[jj][RWParams.Gam3[jj] .> indmin] .= 0   
     end
 
     R = size(majorregions, 1) - 1   # regions
     I = 10                          # industries
 
     # create B 
-    for jj in 1:size(majorregions, 1) - 1
-    RWParams.B[jj] .= inv(RWParams.A[jj]' * RWParams.O[jj] * RWParams.A[jj])
+    @inbounds for jj in 1:size(majorregions, 1) - 1
+        RWParams.B[jj] .= inv(RWParams.A[jj]' * RWParams.O[jj] * RWParams.A[jj])
     end
 
     # fossil fuel capital
@@ -211,13 +211,12 @@ function create_RWParams!(RWParams::StructRWParams, majorregions_all::DataFrame,
     RWParams.Countryshifter .= regions[!, :costrel]
 
     # define costshifter
-    for kk in 1:params.N
-    range = majorregions[!, :rowid2][kk]:majorregions[!, :rowid][kk]
+    @inbounds for kk in 1:params.N
+        range = majorregions[!, :rowid2][kk]:majorregions[!, :rowid][kk]
 
-    RWParams.costshifter[range] = (
-    (regions[!, :pop_dens][range] .^ popelas) ./ 
-    (regions[!, :pop_dens][majorregions[!, :rowid2][kk]] .^ popelas)
-    ) .* RWParams.scalar .* RWParams.Countryshifter[range]
+        RWParams.costshifter[range] = ((regions[!, :pop_dens][range] .^ popelas) ./ 
+            (regions[!, :pop_dens][majorregions[!, :rowid2][kk]] .^ popelas)
+            ) .* RWParams.scalar .* RWParams.Countryshifter[range]
     end
 
     # production capital
@@ -257,7 +256,7 @@ function create_FFsupplyCurves(FFsupplyCurves::StructFFsupplyCurves, D::String)
     Q = zeros(15204, 16)
     P = zeros(15204, 16)
 
-    for country = 1:totalCountries
+    @inbounds for country = 1:totalCountries
         country_name = countries[country]
         newQ = countriesCurves.Q[countriesCurves.region_name .== country_name]
         newP = countriesCurves.P_smooth[countriesCurves.region_name .== country_name]
@@ -309,14 +308,6 @@ function fill_Gsupply(D::String)
     return GsupplyCurves
 end
 
-function linear_map()
-    maxstorage=12
-    storepoints=100
-    storagey = range(0, stop=maxstorage, length=storepoints)
-    storagex = range(0, stop=1, length=storepoints)
-    return storagey, storagex
-end
-
 function create_curtmat!(curtmatno::Matrix, curtmat4::Matrix, curtmat12::Matrix, curtmat::Array, D::String)
     curtmatno .= DataFrame(CSV.File("$D/CurtailmentUS/heatmap_us_mat_nostorage.csv", header = false)) |> Matrix
     curtmat4 .= DataFrame(CSV.File("$D/CurtailmentUS/heatmap_us_mat_4hour.csv", header = false)) |> Matrix
@@ -334,7 +325,7 @@ function create_curtmat!(curtmatno::Matrix, curtmat4::Matrix, curtmat12::Matrix,
 
     # fill the NaN border cells with the same value
 
-    for i = 2:size(curtmatno, 1)
+    @inbounds for i = 2:size(curtmatno, 1)
         curtmatno[size(curtmatno,1)-i+2, i] = curtmatno[size(curtmatno,1)-i+1, i]
         curtmat4[size(curtmat4,1)-i+2, i] = curtmat4[size(curtmat4,1)-i+1, i]
         curtmat12[size(curtmat12,1)-i+2, i] = curtmat12[size(curtmat12,1)-i+1, i]

@@ -7,9 +7,9 @@ export Matshifter
 function Matshifter(M)
     K, J = size(M)
 
-    for k = 1:K
+    @inbounds for k = 1:K
         counter = 0
-        for j = 1:J
+        @inbounds for j = 1:J
             if counter == 1 && M[k, j] > 0
                 M[k, j] = -1
             end
