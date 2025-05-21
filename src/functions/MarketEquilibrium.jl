@@ -72,7 +72,7 @@ function location_prices!(pijs::Vector{Matrix{Float64}}, PCs::Matrix{Float64}, X
     end
 end
 
-function update_wage_data!(tpijs::Matrix, params::StructParams, w0::Union{Matrix, Vector}, pES::Union{Vector, Matrix},
+function update_wage_data!(params::StructParams, w0::Union{Matrix, Vector}, pES::Union{Vector, Matrix},
     p_F::Union{Float64, Vector, Int}, r::Union{Vector, Matrix}, Ej, PCs::Matrix, Xjdashs::Matrix,
     Yjdashs::Matrix)
 
@@ -80,7 +80,9 @@ function update_wage_data!(tpijs::Matrix, params::StructParams, w0::Union{Matrix
     one_minus_sig = 1 - sig
     inv_exponent = 1 / one_minus_sig     # for later use
 
-    for i in 1:params.I
+    Threads.@threads :static for i in 1:params.I
+        tpjs = Matrix{Float64}(undef, 2531, 2531)
+
         # Precompute parameters for the i-th iteration.
         τ       = params.tau[i]
         exp1    = params.Vs[i, 1]
@@ -95,12 +97,12 @@ function update_wage_data!(tpijs::Matrix, params::StructParams, w0::Union{Matrix
         beta    = @view params.betaS[:, i]
         
         # Compute tpijs with fused broadcast.
-        @. tpijs = τ * (w0 ^ exp1) * (pES ^ exp23) *
+        @. tpjs = τ * (w0 ^ exp1) * (pES ^ exp23) *
                    ((κ + (κ * p_F / pES) ^ (1 - ψ)) ^ exp34) *
                    (r ^ exp4) / (Z * zsec * cdc)
         
         # Compute temporary array: tpijs^(1 - sig) is used twice.
-        temp = tpijs .^ one_minus_sig
+        temp = tpjs .^ one_minus_sig
         
         # Calculate PCs along the columns (summing along rows).
         PCs[:, i] = (sum(temp, dims=1)) .^ inv_exponent
@@ -110,7 +112,7 @@ function update_wage_data!(tpijs::Matrix, params::StructParams, w0::Union{Matrix
         
         # Update Xjdashs and Yjdashs with fused operations.
         Xjdashs[:, i] = sum(temp .* factor, dims=2)
-        Yjdashs[:, i] = sum((tpijs .^ (-sig)) .* factor, dims=2)
+        Yjdashs[:, i] = sum((tpjs .^ (-sig)) .* factor, dims=2)
     end
 
 end
@@ -140,7 +142,6 @@ function wage_update_ms(w::Union{Vector, Matrix}, p_E_D::Union{Vector, Matrix},p
     w_adjustment_factor = Matrix{Float64}(undef, 2531, 1)
     W_Real = Vector{Float64}(undef, 2531)
     PC = Vector{Float64}(undef, 2531)
-    tpijs = Matrix{Float64}(undef, 2531, 2531)
     Xjdash = Matrix{Float64}(undef, 2531, 1)
 
     w0 = copy(w)
@@ -150,7 +151,7 @@ function wage_update_ms(w::Union{Vector, Matrix}, p_E_D::Union{Vector, Matrix},p
     Xj = @. w0 * params.L + pED * D_E + r * KP  
     Ej = @. w0 * params.L + pES * Y_E + r * KP + Pi + fossil
 
-    update_wage_data!(tpijs, params, w0, pED, p_F, r, Ej, PCs, Xjdashs, Yjdashs)
+    update_wage_data!(params, w0, pED, p_F, r, Ej, PCs, Xjdashs, Yjdashs)
     
     # calculate price indices and adjust wages
     price_adjustments!(PC, PCs, params, w0, Xjdashs, Xj, pES, pED, p_F, W_Real, w_adjustment_factor, Xjdash)

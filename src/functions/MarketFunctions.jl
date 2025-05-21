@@ -457,6 +457,9 @@ function solve_initial_equilibrium(params::StructParams, wage_init::Vector{Float
         # solve wages and calculate productivity
         w_update, WR, Incomefactor, PC, Xjdashs = wage_update_ms(w_guess, p_E_init, p_E_init, p_F, D_init, YE_init, rP_init, KP_init, PI_init, fossilsales, params);
 
+        # 2.514 s (393 allocations: 1.91 GiB) Parallel
+        #   2.453 s (395 allocations: 1.91 GiB)
+
         W_Real .= WR
         PC_init .= PC
 
