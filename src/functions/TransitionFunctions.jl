@@ -147,7 +147,7 @@ function fill_lpg!(lpg::Array{Float64,3}, expo1::Matrix{Float64})
     lpg .= expo1_reshaped
 end
 
-function sectoral_allocations!(Lsectorpath_guess::Array{Float64, 3}, laboralloc_path::Array{Float64, 3}, laboralloc_init::Matrix, sseq::StructPowerOutput, T::Int, expo1::Matrix{Float64})
+function sectoral_allocations!(Lsectorpath_guess::Array{Float64, 3}, laboralloc_path::Array{Float64, 3}, laboralloc_init::Matrix, sseq::StructPowerOutput, T::Int, expo1::Matrix{Float64}, params::StructParams)
     
     lpg = Array{Float64}(undef, 2531, 501, 10) # 2 allocations, 1.164 ms
 
@@ -334,7 +334,8 @@ function up_rP_path!(rP_path::Matrix{Float64}, r_path::Adjoint{Float64, Vector{F
 end
 
 function up_pg_path!(pg_path_s::Array{Float64, 3}, w_path_guess::Matrix{Float64}, Vs::Matrix{Float64}, J::Int, p_E_path_guess::Matrix{Float64},
-    kappa::Matrix{Float64}, p_F_path_guess::Matrix{Float64}, psi::Float64, Z::Matrix{Float64}, zsector::Matrix{Float64}, cdc::Float64)
+    kappa::Matrix{Float64}, p_F_path_guess::Matrix{Float64}, psi::Float64, Z::Matrix{Float64}, zsector::Matrix{Float64}, cdc::Float64, T::Int64, 
+    rP_path::Matrix{Float64})
     @views V1 = Vs[:, 1]' .* ones(J, 1)
     @views V2 = Vs[:,2]' .^ (ones(J, 1)) + (Vs[:,3]' .* ones(J, 1))
     @views V3 = Vs[:,4]' .* ones(J, 1)
@@ -420,12 +421,12 @@ end
 # ---------------------------------------------------------------------------- #
 function fill_shifter!(psi::Float64, pg_path_s::Array{Float64, 3}, kappa::Float64, p_F_in::Vector{Float64},
     Z::Matrix{Float64}, ind, zsector::Matrix{Float64}, Lsectorpath_guess::Array{Float64, 3}, Kshifter::Matrix{Float64}, V1::Matrix{Float64}, V2::Matrix{Float64},
-    V3::Matrix{Float64}, V4::Matrix{Float64}, t::Int64, shifter::Matrix{Float64}, power::Matrix{Float64})
+    V3::Matrix{Float64}, V4::Matrix{Float64}, t::Int64, shifter::Matrix{Float64}, power::Matrix{Float64}, p_E_path_guess::Matrix{Float64}, I::Int64, laboralloc_path::Array{Float64, 3})
     
     p1 = psi - 1
     p2 = psi / p1
 
-    @views prices = p_E_path_guess[ind, t] .* ones(1, params.I)
+    @views prices = p_E_path_guess[ind, t] .* ones(1, I)
     @views pg_s = pg_path_s[ind, :, t]
 
     @views shifter .= pg_s .* (kappa .+ (prices ./ (kappa .* p_F_in)) .^ (p1)) .^ (p2 .* (V1)) .*
@@ -452,7 +453,8 @@ function data_set_up_transition!(t::Int, kk::Int, majorregions::DataFrame, Lsect
     p_F_in .= p_F_path_guess[:,t]
     power .= (V2) .+ (V1)
 
-    fill_shifter!(params.psi, pg_path_s, kappa, p_F_in, params.Z, ind, params.zsector, Lsectorpath_guess, Kshifter, V1, V2, V3, V4, t, shifter, power) # 569.300 μs (61 allocations: 118.64 KiB)
+    fill_shifter!(params.psi, pg_path_s, kappa, p_F_in, params.Z, ind, params.zsector, Lsectorpath_guess, 
+        Kshifter, V1, V2, V3, V4, t, shifter, power, p_E_path_guess, params.I, laboralloc_path) # 569.300 μs (61 allocations: 118.64 KiB)
 
     @views KRshifter .= (regionParams.thetaS[ind] .* KR_path_S[ind, t]) + (regionParams.thetaW[ind] .* KR_path_W[ind, t]) # 1.870 μs (15 allocations: 6.94 KiB)
     @views KFshifter .= KF_path[ind, t]
@@ -482,7 +484,8 @@ function set_up_opt!(Kshifter::Matrix{Float64}, guess::Vector{Float64}, p_F_in::
     Lsectorpath_guess::Array{Float64, 3}, V1::Matrix{Float64}, V2::Matrix{Float64}, V3::Matrix{Float64}, V4::Matrix{Float64}, 
     w_path_guess::Matrix{Float64}, rP_path::Matrix{Float64}, D_path::Matrix{Float64}, Y_path::Matrix{Float64}, 
     p_F_path_guess::Matrix{Float64}, params::StructParams, pg_path_s::Array{Float64, 3}, power::Matrix{Float64}, regionParams::StructRWParams, 
-    KR_path_S::Matrix{Float64}, KR_path_W::Matrix{Float64}, KF_path::Matrix{Float64}, t::Int64, n::Int64)
+    KR_path_S::Matrix{Float64}, KR_path_W::Matrix{Float64}, KF_path::Matrix{Float64}, t::Int64, n::Int64, kappa::Float64, p_E_path_guess::Matrix{Float64},
+    laboralloc_path::Array{Float64, 3})
     
     # set up optimization problem for region kk
     Kshifter .= Lsectorpath_guess[ind, :, t] .* V4 ./ V3 .* (w_path_guess[ind, t] ./ rP_path[ind, t])
@@ -492,7 +495,7 @@ function set_up_opt!(Kshifter::Matrix{Float64}, guess::Vector{Float64}, p_F_in::
 
     @. p_F_in = p_F_path_guess[:, t] 
 
-    fill_shifter!(params.psi, pg_path_s, kappa, p_F_in, params.Z, ind, params.zsector, Lsectorpath_guess, Kshifter, V1, V2, V3, V4, t, shifter, power) 
+    fill_shifter!(params.psi, pg_path_s, kappa, p_F_in, params.Z, ind, params.zsector, Lsectorpath_guess, Kshifter, V1, V2, V3, V4, t, shifter, power, p_E_path_guess, params.I, laboralloc_path) 
 
     @. @views KRshifter = regionParams.thetaS[ind] * KR_path_S[ind, t] + regionParams.thetaW[ind] * KR_path_W[ind, t]
     @views KFshifter .= KF_path[ind, t] 
@@ -681,7 +684,7 @@ end
 function update_labour_mrkt!(w_path_guess::Matrix{Float64}, Lsectorpath_guess::Array{Float64, 3}, 
         Lsector::Matrix{Float64}, params::StructParams, rP_path::Matrix{Float64}, p_E_path_guess::Matrix{Float64}, 
         p_F_path_guess::Matrix{Float64}, D_path::Matrix{Float64}, Y_path::Matrix{Float64}, KP_path_guess::Matrix{Float64}, 
-        PI_path::Matrix{Float64}, w_update::Matrix{Float64}, w_real_path::Matrix{Float64}, PC::Matrix{Float64})
+        PI_path::Matrix{Float64}, w_update::Matrix{Float64}, w_real_path::Matrix{Float64}, PC::Matrix{Float64}, capT::Int64)
 
     @inbounds for i in 1:capT
         # get capital vec
@@ -704,7 +707,7 @@ end
 
 function update_fossil_market!(fossilsales_path::Matrix, p_F_path_guess::Matrix{Float64},
                                 laboralloc_path::Array, D_path::Matrix, params::StructParams, p_E_path_guess::Matrix, YF_path::Matrix, 
-                                KF_path::Matrix, p_F_int, regions::DataFrame, T::Int, interp1, g::Float64, r_path::Adjoint{Float64, Vector{Float64}}, 
+                                KF_path::Matrix, p_F_int::Float64, regions::DataFrame, T::Int, interp1, g::Float64, r_path::Adjoint{Float64, Vector{Float64}}, 
                                 fusage_total_path::Matrix, p_F_update::Matrix)
     # compute electricity and fossil fuel usage in industry and electricity
     e2_path = Matrix{Float64}(undef, 2531, 501)
@@ -995,7 +998,7 @@ function solve_transition_eq(R_LR::Float64, GsupplyCurves::StructGsupply, decayp
 
 
     # initial guess for sectoral allocations
-    sectoral_allocations!(Lsectorpath_guess, laboralloc_path, laboralloc_init, sseq, T, expo1)
+    sectoral_allocations!(Lsectorpath_guess, laboralloc_path, laboralloc_init, sseq, T, expo1, params)
 
     # Initial guess for fossil path    
     guess_path_fossil!(p_F_path_guess, T)
@@ -1032,7 +1035,7 @@ function solve_transition_eq(R_LR::Float64, GsupplyCurves::StructGsupply, decayp
         # set returns on capital
         up_rP_path!(rP_path, r_path, params.deltaP, PC_path_guess) # 679.000 μs (1 allocation: 16 bytes)
 
-        up_pg_path!(pg_path_s, w_path_guess, params.Vs, params.J, p_E_path_guess, params.kappa, p_F_path_guess, params.psi, params.Z, params.zsector, params.cdc) #  679.115 ms (20566 allocations: 21.93 MiB)
+        up_pg_path!(pg_path_s, w_path_guess, params.Vs, params.J, p_E_path_guess, params.kappa, p_F_path_guess, params.psi, params.Z, params.zsector, params.cdc, T, rP_path) #  679.115 ms (20566 allocations: 21.93 MiB)
 
         # power path
         up_YR_path!(YR_path, regionParams.thetaS, KR_path_S, regionParams.thetaW, KR_path_W) # 1.273 ms (0 allocations: 0 bytes)
@@ -1078,7 +1081,7 @@ function solve_transition_eq(R_LR::Float64, GsupplyCurves::StructGsupply, decayp
         
         update_labour_mrkt!(w_path_guess, Lsectorpath_guess, sseq.Lsector, params, rP_path, 
             p_E_path_guess, p_F_path_guess, D_path, Y_path, KP_path_guess, PI_path, w_update, 
-            w_real_path, PC) # 58.696 s (7961 allocations: 29.64 GiB)
+            w_real_path, PC, capT) # 58.696 s (7961 allocations: 29.64 GiB)
 
         # ---------------------------------------------------------------------------- #
         #                             UPDATE FOSSIL MARKET                             #

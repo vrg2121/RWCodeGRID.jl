@@ -187,7 +187,6 @@ end
 
 function solve_model(kk::Int, l_guess::Int, LB::Vector, UB::Vector, guess::Union{Vector, Matrix}, regionParams::StructRWParams, params::StructParams, power::Matrix, 
     shifter::Matrix, KFshifter::Union{SubArray, Vector}, KRshifter::Vector, p_F::Union{Float64, Vector, Int}, mid::Int)
-    #println("solving the model for region $kk")
     model = Model(Ipopt.Optimizer)
     set_silent(model)
     add_model_variable(model, LB, l_guess, UB, guess)
@@ -195,6 +194,26 @@ function solve_model(kk::Int, l_guess::Int, LB::Vector, UB::Vector, guess::Union
     add_model_objective(model, power, shifter, KFshifter, KRshifter, p_F, params)
     optimize!(model)
     return value.(model[:x])
+end
+
+function hess_model(g::AbstractMatrix, model)
+    x = model[:x]
+    Dvec = x[1:(end/2)]
+    Yvec = x[(end / 2) + 1:end]
+    J = length(Dvec)
+
+    Dsec = Dvec .* ones(1, params.I)
+    power2 = (1 / params.alpha1)
+
+    piece1 = -sum(((power - 1) .* power)  .* Dsec .^ (power-2) .* shifter, 2)
+    piece1 = Diagonal(piece1)
+
+    piece2 = (power2 - 1) .* power2 .* p_F .* (Yvec - KRshifter) .^ (power2 - 2) .* (1 ./ KFshifter .^ params.alpha2) .^ power2
+    piece2 = Diagonal(piece2)
+
+    f2 = [piece1 zeros(J, J);
+        zeros(J, J) piece2]    
+
 end
 
 

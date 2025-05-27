@@ -144,12 +144,12 @@ function writedata(P::StructAllParams, DL::StructAllData, M::StructMarketOutput,
     YR_path = T.transeq.YR_path
     p_KR_path_S = T.transeq.p_KR_path_S
     p_KR_path_W = T.transeq.p_KR_path_W
-    writedlm("$R/KR_path/KR_path_$SGE_TASK_ID.csv", KR_path, ",") # no output
+    writedlm("$R/KR_path/KR_path_$SGE_TASK_ID.csv", KR_path, ",") 
     writedlm("$R/renewshareUS/renewshareUS_$SGE_TASK_ID.csv", T.renewshareUS, ",") 
-    writedlm("$R/YF_path/YF_path_$SGE_TASK_ID.csv", YF_path, ",") # no output
-    writedlm("$R/YR_path/YR_path_$SGE_TASK_ID.csv", YR_path, ",") # no output
-    writedlm("$R/p_KR_path_S/p_KR_path_S_$SGE_TASK_ID.csv", p_KR_path_S, ",") # no output
-    writedlm("$R/p_KR_path_W/p_KR_path_W_$SGE_TASK_ID.csv", p_KR_path_W, ",") # no output
+    writedlm("$R/YF_path/YF_path_$SGE_TASK_ID.csv", YF_path, ",")
+    writedlm("$R/YR_path/YR_path_$SGE_TASK_ID.csv", YR_path, ",")
+    writedlm("$R/p_KR_path_S/p_KR_path_S_$SGE_TASK_ID.csv", p_KR_path_S, ",")
+    writedlm("$R/p_KR_path_W/p_KR_path_W_$SGE_TASK_ID.csv", p_KR_path_W, ",")
 
 end
 

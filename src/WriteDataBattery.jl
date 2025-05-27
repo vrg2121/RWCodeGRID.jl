@@ -4,6 +4,9 @@ module WriteDataBattery
 import DelimitedFiles: writedlm
 import ..ModelConfiguration: ModelConfig
 import DrawGammas: StructAllParams
+import ..Market: StructMarketOutput
+import ..SteadyState: StructSteadyState
+import ..Transition: StructTransOutput
 
 # import data from model
 export writedata_battery
@@ -29,7 +32,8 @@ Model results for capital and battery price falls, renewable shares, US GDP outc
 This function writes data when RunBattery==1 or RunCurtailment==1.
 """
 function writedata_battery(P::StructAllParams, M::StructMarketOutput, S::StructSteadyState, T::StructTransOutput, config::ModelConfig, R::String)
-    SGE_TASK_ID = Base.parse(Int, ENV["SGE_TASK_ID"])
+    SGE_TASK_ID = "0"
+    #SGE_TASK_ID = Base.parse(Int, ENV["SGE_TASK_ID"])
     curtailmentswitch = P.curtailmentswitch
     hoursofstorage = config.hoursofstorage
     
@@ -116,7 +120,7 @@ function writedata_battery(P::StructAllParams, M::StructMarketOutput, S::StructS
 
     welfare_2040 = Matrix{Float64}(undef, 2531, 5)
     welfare_2040 .= [P.regions.csr_id T.welfare_wagechange_2040 T.welfare_capitalchange_2040 T.welfare_electricitychange_2040 T.welfare_fossilchange_2040]
-    writedlm("$R/welfare_2024/welfare_2040$(labeller).csv", welfare_2040, ",")
+    writedlm("$R/welfare_2040/welfare_2040$(labeller).csv", welfare_2040, ",")
 end
 
 end

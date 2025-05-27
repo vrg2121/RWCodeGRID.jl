@@ -136,12 +136,6 @@ function solve_transition(P::StructAllParams, DL::StructAllData, M::StructMarket
     
     YUS = sum(transeq.Y_path[1:722, :], dims=1)
     YUS_rel = YUS ./ YUS[1]
-    
-    p_F_path_guess = transeq.p_F_path_guess
-
-    if config.hoursofstorage==0
-        matwrite("$G/p_F_path_guess_saved.mat", Dict("p_F_path_guess" => p_F_path_guess))
-    end
 
     return StructTransOutput(
         transeq,
@@ -156,6 +150,15 @@ function solve_transition(P::StructAllParams, DL::StructAllData, M::StructMarket
         st
     )
 end
+
+# ---------------------------------------------------------------------------- #
+#                                   Addendum                                   #
+# ---------------------------------------------------------------------------- #
+#p_F_path_guess = transeq.p_F_path_guess
+
+#if config.hoursofstorage==0
+#    matwrite("$G/p_F_path_guess_saved.mat", Dict("p_F_path_guess" => p_F_path_guess))
+#end
 
 end
 

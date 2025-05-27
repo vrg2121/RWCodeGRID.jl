@@ -11,7 +11,7 @@ using ..RegionModel, ..MarketEquilibrium
 import DrawGammas: StructParams
 import ..ModelConfiguration: ModelConfig
 
-export solve_power_output, StructPowerOutput, fill_wr!, up_e2_LR!
+export solve_power_output, StructPowerOutput, fill_wr!, up_e2_LR!, solve_power_output_bat
 
 
 # ---------------------------------------------------------------------------- #
@@ -488,9 +488,200 @@ function solve_power_output(RWParams::StructRWParams, params::StructParams, RunB
     diffp = 1.0    
 
     while diffK > 10^(-2)
+        println("Number of iterations while loop: ", niters)
+        println("Diffk: ", diffK)
+        #println("Number of iterations inner while loop: ", niters_in)
+
+        diffend = 1
+        jj=1
+
+        # ------------------------- set long run goods prices ------------------------ #
+        pg_LR_s .= w_LR .^ (params.Vs[:, 1]' .* ones(params.J, 1)) .* 
+                p_E_LR .^ ((params.Vs[:, 2]'.* ones(params.J, 1)) .+ (params.Vs[:, 3]'.* ones(params.J, 1))) .* 
+                ((params.kappa .+ (params.kappa .* p_F_LR ./ p_E_LR) .^ (1 .- params.psi)) .^ (-(params.psi ./ (params.psi .- 1)) .* params.Vs[:, 3]')) .* rP_LR .^ (params.Vs[:, 4]'.* ones(params.J, 1)) ./ 
+                (params.Z .* params.zsector .* params.cdc) # 1.680 ms (79 allocations: 83.02 KiB)
+
+
+        ss_optimize_region!(result_price_LR, result_Dout_LR, result_Yout_LR, result_YFout_LR, Lossfac_LR, # modified variables
+                pg_LR_s, majorregions, Linecounts, RWParams, laboralloc_LR, Lsector, params, w_LR, 
+                rP_LR, p_E_LR, kappa, regionParams, KF_LR, p_F_LR, linconscount, KR_LR_S, KR_LR_W, mrkteq.result_Yout_init) # 37.425073 seconds (3.52 M allocations: 1.074 GiB, 0.55% gc time)
+
+        ss_optimize_offgrid!(result_Dout_LR, result_Yout_LR, result_price_LR, result_YFout_LR, # modified variables
+                    majorregions, Lsector, mrkteq.laboralloc, params, w_LR, rP_LR, pg_LR_s, p_E_LR, kappa, regionParams,
+                    KR_LR_S, KR_LR_W, KF_LR, p_F_LR)
+
+        fill_LR!(p_E_LR, D_LR, YE_LR, YF_LR, PI_LR, result_price_LR, # modified variables
+                majorregions, result_Dout_LR, result_Yout_LR, result_YFout_LR, params.L, params.N)
+
+        jj = jj+1
+
+        # get production capital vec        
+        up_KP_LR!(KP_LR, Lsector, params.Vs, params.J, w_LR, rP_LR) # 58.900 μs (15 allocations: 257.75 KiB)
+
+        # update prices and wages
+
+        up_prices_wages!(w_LR, w_real, PC_LR, laboralloc_LR, Lsector, # modified variables
+                        p_E_LR, p_F_LR, D_LR, YE_LR, rP_LR, KP_LR, PI_LR, params) # 5.447 s (316 allocations: 1.48 GiB)
+
+        diffend = 0.01
+        niters_in += 1
+
+        # update consumption price guess
+        PC_guess_LR .= 0.2 .* PC_LR .+ (1 - 0.2) .* PC_guess_LR #   1.650 μs (6 allocations: 224 bytes)
+
+        # update capital prices
+
+        Depreciation_LR_S, Depreciation_LR_W, p_KR_LR_S, p_KR_LR_W = up_cap_prices(KR_LR_S, KR_LR_W, params.deltaR, params.iota, T, Initialprod, params.gammaS, params.gammaW) #   14.600 μs (10 allocations: 43.89 KiB)
+
+        # get solar shares
+
+        calc_solar_shares!(SShare_LR::Matrix{Float64}, thetabar_LR::Matrix{Float64}, p_KR_bar_LR::Matrix{Float64}, # modified variables
+                    regionParams.thetaS::Matrix{Float64}, p_KR_LR_S::Float64, params.varrho::Float64, regionParams.thetaW::Matrix{Float64}, p_KR_LR_W::Float64) #   88.200 μs (19 allocations: 178.75 KiB)
+
+        jj = jj + 1
+
+        # update battery prices
+        p_B = update_battery(KR_LR, config.hoursofstorage, params) #   8.175 μs (6 allocations: 43.80 KiB)
+        p_addon = pB_shifter * config.hoursofstorage * p_B
+
+        # generate curtailment factor for grid regions
+        gen_curtailment!(curtailmentfactor_S, curtailmentfactor_W, curtailmentfactor, # modified variables
+            params.N, majorregions, YF_LR, YE_LR, SShare_LR, config.hoursofstorage, interp3) #   136.000 μs (2518 allocations: 723.05 KiB)
+
+
+        diffK, diffp = ss_update_params!(p_KR_bar_LR, p_addon, params, R_LR, regionParams, thetabar_LR, curtailmentswitch,
+                    curtailmentfactor, p_E_LR, KR_LR, KR_LR_S, KR_LR_W, SShare_LR, pE_S_FE, config)
+
+        
+        niters += 1
+    end
+
+    return StructPowerOutput(
+        KR_LR_S,
+        KR_LR_W,
+        p_E_LR,
+        D_LR,
+        YE_LR,
+        PC_guess_LR,
+        PI_LR,
+        w_LR,
+        laboralloc_LR,
+        p_KR_bar_LR,
+        KR_LR,
+        KF_LR,
+        p_KR_LR_S,
+        p_KR_LR_W,
+        p_B,
+        p_F_LR,
+        Lsector,
+        YF_LR,
+        diffK,
+        diffp,
+        result_Dout_LR,
+        result_Yout_LR,
+        result_YFout_LR,
+        result_price_LR,
+        KP_LR,
+        rP_LR,
+        Depreciation_LR_S,
+        Depreciation_LR_W,
+        w_real,
+        PC_LR
+    )
+end
+
+function solve_power_output_bat(RWParams::StructRWParams, params::StructParams, RunBatteries::Int, RunCurtailment::Int,
+    Initialprod::Int, R_LR::Float64, majorregions::DataFrame, Linecounts::DataFrame, linconscount::Int,
+    regionParams::StructRWParams, curtailmentswitch::Int, interp3, T::Int, kappa::Float64, mrkteq::StructMarketEq, config::ModelConfig, 
+    pB_shifter::Float64, sseq::StructPowerOutput, G::String)
+    
+
+    # ---------------------------------------------------------------------------- #
+    #                                Initialization                                #
+    # ---------------------------------------------------------------------------- #
+
+    # Vectors and Matrices
+    KF_LR = Matrix{Float64}(undef, 2531, 1)
+    Lsector = Matrix{Float64}(undef, 2531, 10)
+    KR_LR = Vector{Float64}(undef, 2531)
+
+    sizes = [727, 755, 30, 53, 13, 15, 46, 11, 26, 78, 125, 320, 332]
+    last_element = [reshape(Vector{Float64}(undef, sizes[end]), 1, :)]
+
+    Lossfac_LR = Matrix{Float64}(undef, 1, 12)
+    result_price_LR = [Vector{Float64}(undef, size) for size in sizes[1:end-1]]
+    result_price_LR = [result_price_LR..., last_element]
+    result_YFout_LR = [Vector{Float64}(undef, size) for size in sizes[1:end-1]]
+    result_YFout_LR = [result_YFout_LR..., last_element]
+    D_LR = Vector{Float64}(undef, 2531)
+    YE_LR = Vector{Float64}(undef, 2531)
+    YF_LR = Vector{Float64}(undef, 2531)
+    PI_LR = Vector{Float64}(undef, 2531)
+    curtailmentfactor_S = zeros(1, 2531)
+    curtailmentfactor_W = zeros(1, 2531)
+    curtailmentfactor = Vector{Float64}(undef, 2531)
+    rP_LR = Matrix{Float64}(undef, 2531, 1)
+    pE_S_FE = Vector{Float64}(undef, 2531)
+
+    pg_LR_s = Matrix{Float64}(undef, 2531, 10)
+    KP_LR = Matrix{Float64}(undef, 2531, 1)
+    w_real = Vector{Float64}(undef, 2531)
+    PC_LR = Vector{Float64}(undef, 2531)
+    SShare_LR = Matrix{Float64}(undef, 2531, 1)
+    thetabar_LR = Matrix{Float64}(undef, 2531, 1)
+    p_KR_bar_LR = Matrix{Float64}(undef, 2531, 1)
+
+    Depreciation_LR_S = 0.0
+    Depreciation_LR_W = 0.0
+    p_B = 0.0
+    p_addon = 0.0
+    p_KR_LR_S = 0.0
+    p_KR_LR_W = 0.0
+
+    # Constants
+    p_F_LR = 1.0
+
+    laboralloc_LR = sseq.laboralloc_LR
+    KR_LR_S = sseq.KR_LR_S 
+    KR_LR_W = sseq.KR_LR_W
+    p_E_LR = sseq.p_E_LR
+    w_LR = sseq.w_LR
+    result_Dout_LR = sseq.result_Dout_LR
+    result_Yout_LR = sseq.result_Yout_LR
+    PC_guess_LR = sseq.PC_guess_LR
+
+    # ---------------------------------------------------------------------------- #
+    #                              Set Initial Guesses                             #
+    # ---------------------------------------------------------------------------- #
+
+    KF_LR .= RWParams.KF ./ 10000    # add in minimum of generation ; 1.370 μs (2 allocations: 64 bytes)
+    Lsector .= laboralloc_LR .* params.L # 4.500 μs (2 allocations: 64 bytes)
+    KR_LR_S .+= 0.01
+    KR_LR_W .+= 0.01
+    KR_LR .= KR_LR_S .+ KR_LR_W
+
+    if RunBatteries==0 && RunCurtailment==0
+        pB_shifter = 0
+        config.hoursofstorage=0
+    end
+
+    # set long-run capital returns
+    rP_LR .= (R_LR - 1 + params.deltaP) .* PC_guess_LR     # long run return on production ; 721.642 ns (5 allocations: 112 bytes)
+
+    # ---------------------------------------------------------------------------- #
+    #                          SOLVE LONG RUN STEADYSTATE                          #
+    # ---------------------------------------------------------------------------- #
+
+    # --------------------- Initialize Intermediate Variables -------------------- #
+    niters = 1
+    niters_in = 1
+    diffK = 1.0
+    diffp = 1.0    
+
+    while diffK > 10^(-2)
         println("Number of iterations outer while loop: ", niters)
         println("Diffk: ", diffK)
-        println("Number of iterations inner while loop: ", niters_in)
+        #println("Number of iterations inner while loop: ", niters_in)
 
         diffend = 1
         jj=1

@@ -12,6 +12,15 @@ import .ModelConfiguration: ModelConfig
 # load struct for model Params
 using DrawGammas #StructAllParams, StructParams
 
+wd = pwd()
+D = "$wd/Data"
+G = "$wd/Guesses"
+R = "$wd/Results"
+using JLD2
+P = jldopen("$D/Params/P_1.jld2", "r")["P"]; # 565138336 bytes = 565 MB
+import ..ModelConfiguration: ModelConfig
+config = ModelConfig(1, 1, 0, 0, 2, 100, 0, [2.0, 4.0, 6.0])
+
 # Load Data
 include("./functions/DataAdjustments.jl")
 include("./functions/DataLoadsFunc.jl")
@@ -37,12 +46,14 @@ import .Transition: solve_transition
 
 # Write Data
 include("./WriteData.jl")
-
 import .WriteData: writedata
 
 # Write Data with Battery configurations
 include("./WriteDataBattery.jl")
 import .WriteDataBattery: writedata_battery
+
+include("./SteadyStateBat.jl")
+import .SteadyStateBat: solve_steadystate_bat, StructSteadyStateBat
 
 # -------------------- Run Exogenous Technology Equilibria ------------------- #
 
@@ -59,7 +70,6 @@ import .TransitionExog: solve_transition_exog
 # Data Outputs with Exogenous Tech
 include("./WriteDataExog.jl")
 import .WriteDataExog: writedata_exog
-
 
 
 #function run_model(config::ModelConfig, D::String, G::String, R::String, P::StructAllParams)
@@ -96,6 +106,7 @@ import .WriteDataExog: writedata_exog
         println("Solving transitional dynamics without Subsidy...")
         Subsidy = 0
         T = solve_transition(P, DL, M, S, Subsidy, config, G)
+        # transeq.p_F_path_guess updated if config.hoursofstorage == 0, input no where
 
         println("Writing outputs of transitional dynamics without Subsidy...")
         writedata(P, DL, M, S, T, Subsidy, config, R)
@@ -119,17 +130,17 @@ import .WriteDataExog: writedata_exog
     If you run config.RunTransition == 1, data will be written using writedata without Subsidy and then with Subsidy.
     If you run config.RunTransition == 1 && config.RunBatteries == 1, data will be written 
         using writedata (with subsidy, without subsidy) and then written using writedatabattery.
-    When you run config.RunTransition == 1, should hoursofstorage always be 0?
     """
     
     if config.RunBatteries == 1
 
-        for bb in 1:length(config.hoursvec)            
+        for bb in 1:length(config.hoursvec)  
+            bb = 1          
             config.hoursofstorage = config.hoursvec[bb]
             Subsidy = 0
 
             println("Solving long run equilibrium when battery storage hours = $(config.hoursofstorage)...")
-            SB = solve_steadystate(P, DL, M, config, G)
+            SB = solve_steadystate_bat(S, P, DL, M, config, G)
 
             println("Solving transitional dynamics when battery storage hours = $(config.hoursofstorage)...")
             TB = solve_transition(P, DL, M, SB, Subsidy, config, G)
@@ -138,7 +149,6 @@ import .WriteDataExog: writedata_exog
             writedata_battery(P, M, SB, TB, config, R)
         end
     end
-
 
     # ---------------------------------------------------------------------------- #
     #                                Exogenous Tech                                #

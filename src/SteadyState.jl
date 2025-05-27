@@ -13,7 +13,7 @@ import ..DataLoads: StructAllData
 import ..Market: StructMarketOutput
 
 # export variables
-export solve_steadystate, StructSteadyState
+export solve_steadystate, StructSteadyState, solve_steadystate_bat
 
 
 # ---------------------------------------------------------------------------- #
