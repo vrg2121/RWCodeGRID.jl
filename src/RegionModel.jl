@@ -6,20 +6,20 @@ using JuMP, Ipopt
 import DataFrames: DataFrame
 import Random: Random
 import LinearAlgebra: I
-#import SparseArrays: sparse
+import SparseArrays: sparse, SparseMatrixCSC
 import ..DataLoadsFunc: StructRWParams
-import DrawGammas: StructParams
+import ..ParamsFunctions: StructParams
 
 using ..MarketEquilibrium
 
 function data_set_up(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params::StructParams,
-    wage::Union{Matrix, Vector}, rP::Union{Matrix, Vector}, pg_n_s::Matrix, pE::Union{Vector, Matrix}, kappa::Float64, regionParams::StructRWParams, KF::Matrix, p_F::Union{Int64, Float64}, 
-    linconscount::Int, KR_S::Union{Vector, Matrix}, KR_W::Union{Vector, Matrix}, method::String)
+    wage::Union{Matrix, Vector}, rP::Union{Matrix, Vector}, pg_n_s::Matrix, pE::Union{Vector, Matrix}, kappa::Float64, regionParams, KF::Matrix, p_F::Union{Int64, Float64}, 
+    linconscount::Int, KR_S::Matrix, KR_W::Matrix, method::String)
     local ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
     local n = majorregions.n[kk]
-    "local l_ind = Linecounts.rowid2[kk]:Linecounts.rowid[kk]
+    local l_ind = Linecounts.rowid2[kk]:Linecounts.rowid[kk]
     local gam = RWParams.Gam[kk]
-    local l_n = Linecounts.n[kk]"
+    local l_n = Linecounts.n[kk]
 
     local @views secalloc = laboralloc[ind, :]
     local @views Lshifter = Lsector[ind, :]
@@ -31,7 +31,7 @@ function data_set_up(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RW
     # all of these are varying correctly
 
     # define data for inequality constraints
-    "local linecons = copy(RWParams.Zmax[l_ind])
+    local linecons = copy(RWParams.Zmax[l_ind])
     local Gammatrix = hcat(zeros(size(gam, 1)), gam)
 
     if linconscount < l_n
@@ -44,7 +44,7 @@ function data_set_up(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RW
     local stacker = [-Matrix(I, n, n) Matrix(I, n, n)]
     local Gammatrix = sparse(Gammatrix * stacker)
     local Gammatrix = [Gammatrix; -Gammatrix]
-    local linecons = [linecons; linecons]"
+    local linecons = [linecons; linecons]
 
     # define shifters for objective function
     local @views pg_s = pg_n_s[ind, :]
@@ -61,8 +61,8 @@ function data_set_up(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RW
                     Kshifter .^ (params.Vs[:,4]'.* ones(n, 1))
     local shifter=shifter.*secalloc.^power
 
-    local @views KRshifter = @. (regionParams.thetaS[ind] * KR_S[ind]) + 
-                            (regionParams.thetaW[ind] * KR_W[ind])
+    local @views KRshifter = @. regionParams.thetaS[ind] * KR_S[ind] + 
+                            regionParams.thetaW[ind] * KR_W[ind]
     local @views KFshifter=KF[ind]
 
     if method == "market"
@@ -93,17 +93,20 @@ function data_set_up(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RW
     local l_guess = length(guess)
     local mid = l_guess ÷ 2
 
-    return l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid
+    return l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid, Gammatrix, linecons
 end
+# 1842 calls on Market.jl compiler
+# lots of type inference
 
-function data_set_up_exog(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params::StructParams,
-    wage::Union{Matrix, Vector}, rP::Vector, pg_n_s::Matrix, pE::Union{Vector, Matrix}, kappa::Float64, regionParams, KF::Matrix, p_F::Union{Int64, Float64}, 
+
+function data_set_up_exog(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RWParams::StructRWParams, laboralloc::Matrix, Lsector::Matrix, params,
+    wage::Union{Matrix, Vector}, rP::Vector, pg_n_s::Matrix, pE::Union{Vector, Matrix}, kappa::Int, regionParams, KF::Matrix, p_F::Union{Int64, Float64}, 
     linconscount::Int, KR_S::Matrix, KR_W::Matrix, result_Dout_LR, result_Yout_LR)
     local ind = majorregions.rowid2[kk]:majorregions.rowid[kk]
     local n = majorregions.n[kk]
-    "local l_ind = Linecounts.rowid2[kk]:Linecounts.rowid[kk]
-    local gam = RWParams.Gam[kk]
-    local l_n = Linecounts.n[kk]"
+    local l_ind = Linecounts.rowid2[kk]:Linecounts.rowid[kk]
+    local gam_kk = RWParams.Gam[kk]
+    local l_n = Linecounts.n[kk]
 
     local @views secalloc = laboralloc[ind, :]
     local @views Lshifter = Lsector[ind, :]
@@ -112,22 +115,23 @@ function data_set_up_exog(kk::Int, majorregions::DataFrame, Linecounts::DataFram
                     (wage[ind] ./ rP[ind])
     #Ltotal=sum(Lshifter,dims=2)
     #Jlength= n
+    # all of these are varying correctly
 
     # define data for inequality constraints
-    "local linecons = copy(RWParams.Zmax[l_ind])
-    local Gammatrix = hcat(zeros(size(gam, 1)), gam)
+    local linecons = RWParams.Zmax[l_ind]
+    local Gammatrix = hcat(zeros(n_constraints, 1), gam_kk)
 
     if linconscount < l_n
         Random.seed!(1)  
         randvec = rand(l_n)  
-        randvec = randvec .> (linconscount / l_n)  
-        Gammatrix[findall(randvec), :] .= 0 
+        mask = randvec .> (linconscount / l_n)  
+        Gammatrix[mask, :] .= 0 
     end   
 
-    local stacker = [-Matrix(I, n, n) Matrix(I, n, n)]
+    local stacker = hcat(-I(n), I(n))
     local Gammatrix = sparse(Gammatrix * stacker)
-    local Gammatrix = [Gammatrix; -Gammatrix]
-    local linecons = [linecons; linecons]"
+    local Gammatrix = vcat(Gammatrix, -Gammatrix)
+    local linecons = vcat(linecons, linecons)
 
     # define shifters for objective function
     local @views pg_s = pg_n_s[ind, :]
@@ -158,62 +162,68 @@ function data_set_up_exog(kk::Int, majorregions::DataFrame, Linecounts::DataFram
     local l_guess = length(guess)
     local mid = l_guess ÷ 2
 
-    return l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid
+    return l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid, Gammatrix, linecons
 end
 
 function add_model_variable(model::Model, LB::Vector, l_guess::Int, UB::Vector, guess::Union{Vector, Matrix})
-    x = Vector{AffExpr}(undef, l_guess)
+    local x = Vector{AffExpr}(undef, l_guess)
     for i in eachindex(x)
-        x[i] = AffExpr(0.0)
+        local x[i] = AffExpr(0.0)
     end
     return @variable(model, LB[i] <= x[i=1:l_guess] <= UB[i], start=guess[i])
 end
 
 function add_model_constraint(model::Model, regionParams::StructRWParams, params::StructParams, kk::Int, mid::Int)
-    x = model[:x]
-    Pvec = @expression(model, x[mid+1:end] .- x[1:mid])
-    sPvec = @expression(model, sum(Pvec))
-    quad_mat = @expression(model, -params.Rweight .* Pvec[2:end]' * regionParams.B[kk] * Pvec[2:end])
+    local x = model[:x]
+    local Pvec = @expression(model, x[mid+1:end] .- x[1:mid])
+    local sPvec = @expression(model, sum(Pvec))
+    local quad_mat = @expression(model, -params.Rweight .* Pvec[2:end]' * regionParams.B[kk] * Pvec[2:end])
     add_to_expression!(quad_mat[1], sPvec-Pvec[1]^2)
     
-    return @constraint(model, ceq, quad_mat[1] ==0)
+    return @constraint(model, ceq, quad_mat[1] == 0)
 
 end
+# 418 calls on Market.jl compiler
+# lots of type inference
 
 function add_model_objective(model::Model, power::Matrix, shifter::Matrix, KFshifter::Union{Vector, SubArray}, KRshifter::Vector, p_F::Union{Float64, Vector, Int}, params::StructParams)
-    x = model[:x]
+    local x = model[:x]
     @objective(model, Min, obj(x, power, shifter, KFshifter, KRshifter, p_F, params))
 end
 
+# 683 calls on Market.jl compiler
+# lots of type inference
+
+function add_model_objective_test(model::Model, power::Matrix, shifter::Matrix, KFshifter::Union{Vector, SubArray}, 
+            KRshifter::Vector, p_F::Union{Float64, Vector, Int}, params::StructParams, mid::Int, power2::Float64)
+    local x = model[:x]
+    local Dsec = @expression(model, x[1:mid] .* ones(1, params.I))
+    local Yvec = @expression(model, x[1+mid:end])
+    local value1 = @expression(model, sum((-(Dsec .^ power) .* shifter), dims=2))
+    local svalue1 = @expression(model, sum(value1))
+    local value2 = @expression(model, p_F .* ((Yvec .- KRshifter) ./ KFshifter .^ params.alpha2) .^ power2)
+    local svalue2 = @expression(model, sum(value2))
+    local svalue1 += svalue2
+
+    return @objective(model, Min, svalue1)
+    
+end
+
+function add_gammatrix_constraint(model::Model, Gammatrix::SparseMatrixCSC, linecons::Vector{Float64})
+    local x = model[:x]
+    return @constraint(model, lingamcon, Gammatrix * x <= linecons)
+end
+
 function solve_model(kk::Int, l_guess::Int, LB::Vector, UB::Vector, guess::Union{Vector, Matrix}, regionParams::StructRWParams, params::StructParams, power::Matrix, 
-    shifter::Matrix, KFshifter::Union{SubArray, Vector}, KRshifter::Vector, p_F::Union{Float64, Vector, Int}, mid::Int)
-    model = Model(Ipopt.Optimizer)
+    shifter::Matrix, KFshifter::Union{SubArray, Vector}, KRshifter::Vector, p_F::Union{Float64, Vector, Int}, mid::Int, Gammatrix::SparseMatrixCSC, linecons::Vector{Float64})
+    local model = Model(Ipopt.Optimizer)
     set_silent(model)
     add_model_variable(model, LB, l_guess, UB, guess)
     add_model_constraint(model, regionParams, params, kk, mid)
+    add_gammatrix_constraint(model, Gammatrix, linecons)
     add_model_objective(model, power, shifter, KFshifter, KRshifter, p_F, params)
     optimize!(model)
     return value.(model[:x])
-end
-
-function hess_model(g::AbstractMatrix, model)
-    x = model[:x]
-    Dvec = x[1:(end/2)]
-    Yvec = x[(end / 2) + 1:end]
-    J = length(Dvec)
-
-    Dsec = Dvec .* ones(1, params.I)
-    power2 = (1 / params.alpha1)
-
-    piece1 = -sum(((power - 1) .* power)  .* Dsec .^ (power-2) .* shifter, 2)
-    piece1 = Diagonal(piece1)
-
-    piece2 = (power2 - 1) .* power2 .* p_F .* (Yvec - KRshifter) .^ (power2 - 2) .* (1 ./ KFshifter .^ params.alpha2) .^ power2
-    piece2 = Diagonal(piece2)
-
-    f2 = [piece1 zeros(J, J);
-        zeros(J, J) piece2]    
-
 end
 
 

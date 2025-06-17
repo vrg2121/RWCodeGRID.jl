@@ -412,7 +412,7 @@ function data_set_up_transition(t::Int, kk::Int, majorregions::DataFrame, Lineco
     l_guess = length(guess)
     mid = l_guess ÷ 2
 
-    return l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid, p_F_in
+    return l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid, p_F_in, Gammatrix, linecons
 
 end
 
@@ -512,12 +512,12 @@ function transition_electricity_US_Europe!(result_price_path::Matrix, result_Dou
     for kk=1:2
         
         Threads.@threads :static for t in 1:capT
-            local l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid, p_F_in = data_set_up_transition(t, kk, majorregions, Linecounts, RWParams, laboralloc_path, Lsectorpath_guess, params,
+            local l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid, p_F_in, Gammatrix, linecons = data_set_up_transition(t, kk, majorregions, Linecounts, RWParams, laboralloc_path, Lsectorpath_guess, params,
                                                                                             w_path_guess, rP_path, pg_path_s, p_E_path_guess, kappa, regionParams, KF_path, p_F_path_guess, 
                                                                                             linconscount, KR_path_S, KR_path_W)
 
             local P_out = solve_model(kk, l_guess, LB, UB, guess, regionParams, params, power, 
-                                    shifter, KFshifter, KRshifter, p_F_in, mid)
+                                    shifter, KFshifter, KRshifter, p_F_in, mid, Gammatrix, linecons)
 
             result_price_path[kk, t] .= Price_Solve(P_out, shifter, n, params)
             @views result_Dout_path[kk, t] .= P_out[1:mid]
@@ -538,12 +538,12 @@ function transition_electricity_other_countries!(result_price_path::Matrix, resu
     
     for kk=3:(params.N - 1)
         Threads.@threads :static for t = 1:capT
-            local l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid, p_F_in = data_set_up_transition(t, kk, majorregions, Linecounts, RWParams, laboralloc_path, Lsectorpath_guess, params,
+            local l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid, p_F_in, Gammatrix, linecons = data_set_up_transition(t, kk, majorregions, Linecounts, RWParams, laboralloc_path, Lsectorpath_guess, params,
                             w_path_guess, rP_path, pg_path_s, p_E_path_guess, kappa, regionParams, KF_path, p_F_path_guess, 
                             linconscount, KR_path_S, KR_path_W)
 
             local P_out = solve_model(kk, l_guess, LB, UB, guess, regionParams, params, power, 
-                            shifter, KFshifter, KRshifter, p_F_in, mid)
+                            shifter, KFshifter, KRshifter, p_F_in, mid, Gammatrix, linecons)
 
             result_price_path[kk, t].= Price_Solve(P_out, shifter, n, params)
             @views result_Dout_path[kk, t] .= P_out[1:mid]

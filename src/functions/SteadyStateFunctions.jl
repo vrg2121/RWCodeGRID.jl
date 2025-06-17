@@ -65,9 +65,9 @@ function ss_optimize_region!(result_price_LR::Vector, result_Dout_LR::Matrix, re
 
     Threads.@threads for kk in 1:(params.N - 1)
 
-        local l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid = data_set_up(kk, majorregions, Linecounts, RWParams, laboralloc_LR, Lsector, params, w_LR, 
+        local l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid, Gammatrix, linecons = data_set_up(kk, majorregions, Linecounts, RWParams, laboralloc_LR, Lsector, params, w_LR, 
                                                                                         rP_LR, pg_LR_s, p_E_LR, kappa, regionParams, KF_LR, p_F_LR, linconscount, KR_LR_S, KR_LR_W, "steadystate")
-        local P_out = solve_model(kk, l_guess, LB, UB, guess, regionParams, params, power, shifter, KFshifter, KRshifter, p_F_LR, mid)
+        local P_out = solve_model(kk, l_guess, LB, UB, guess, regionParams, params, power, shifter, KFshifter, KRshifter, p_F_LR, mid, Gammatrix, linecons)
     
         result_price_LR[kk] .= Price_Solve(P_out, shifter, n, params)
         @views result_Dout_LR[kk] .= P_out[1:end÷2]
