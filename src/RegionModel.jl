@@ -8,7 +8,7 @@ import Random: Random
 import LinearAlgebra: I
 import SparseArrays: sparse, SparseMatrixCSC
 import ..DataLoadsFunc: StructRWParams
-import ..ParamsFunctions: StructParams
+import DrawGammas: StructParams
 
 using ..MarketEquilibrium
 
@@ -66,8 +66,6 @@ function data_set_up(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RW
     local @views KFshifter=KF[ind]
 
     if method == "market"
-        #println("using method market to set YFmax, LB, UB, guess")
-
         # define bounds
         local YFmax=regionParams.maxF[ind]
         local LB = [zeros(n); KRshifter]
@@ -75,7 +73,6 @@ function data_set_up(kk::Int, majorregions::DataFrame, Linecounts::DataFrame, RW
 
         local guess = [KRshifter .- 0.001; KRshifter]
     elseif method == "steadystate"
-        #println("using method steadystate to set YFmax, LB, UB, guess")
         local YFmax =KF[ind]
         local LB = [zeros(n); KRshifter]
         local UB = [fill(1000, n); YFmax .+ KRshifter .+ 1] # different from market

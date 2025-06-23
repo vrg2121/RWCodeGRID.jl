@@ -55,6 +55,9 @@ import .WriteDataBattery: writedata_battery
 include("./SteadyStateBat.jl")
 import .SteadyStateBat: solve_steadystate_bat, StructSteadyStateBat
 
+include("./TransitionBat.jl")
+import .TransitionBat: StructTransOutputBat, solve_transition_bat
+
 # -------------------- Run Exogenous Technology Equilibria ------------------- #
 
 # Long Run Equilibrium with Exogenous Tech
@@ -72,7 +75,7 @@ include("./WriteDataExog.jl")
 import .WriteDataExog: writedata_exog
 
 
-#function run_model(config::ModelConfig, D::String, G::String, R::String, P::StructAllParams)
+function run_model(config::ModelConfig, D::String, G::String, R::String, P::StructAllParams)
 
     # ---------------------------------------------------------------------------- #
     #                                  Data Loads                                  #
@@ -134,8 +137,7 @@ import .WriteDataExog: writedata_exog
     
     if config.RunBatteries == 1
 
-        for bb in 1:length(config.hoursvec)  
-            bb = 1          
+        for bb in 1:length(config.hoursvec)         
             config.hoursofstorage = config.hoursvec[bb]
             Subsidy = 0
 
@@ -143,7 +145,7 @@ import .WriteDataExog: writedata_exog
             SB = solve_steadystate_bat(S, P, DL, M, config, G)
 
             println("Solving transitional dynamics when battery storage hours = $(config.hoursofstorage)...")
-            TB = solve_transition(P, DL, M, SB, Subsidy, config, G)
+            TB = solve_transition_bat(P, DL, M, SB, Subsidy, config, G)
             
             println("Writing outputs when battery storage hours = $(config.hoursofstorage)...")
             writedata_battery(P, M, SB, TB, config, R)
@@ -191,7 +193,7 @@ import .WriteDataExog: writedata_exog
     end
 
 
-#end
+end
 
 
 end # module RWModel

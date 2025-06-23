@@ -22,13 +22,13 @@ function ss_optimize_region!(result_price_LR::Vector, result_Dout_LR::Matrix, re
     
         for kk in 1:n_regions
             tasks[kk] = Threads.@spawn begin
-                l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid = data_set_up(kk, majorregions, Linecounts, RWParams, laboralloc_LR, Lsector, 
+                l_guess, LB, UB, guess, power, shifter, KFshifter, KRshifter, n, mid, Gammatrix, linecons = data_set_up(kk, majorregions, Linecounts, RWParams, laboralloc_LR, Lsector, 
                                 params, w_LR, rP_LR, pg_LR_s, p_E_LR, kappa, regionParams, 
                                 KF_LR, p_F_LR, linconscount, KR_LR_S, KR_LR_W, "steadystate")
                 
                 # Solve the model for region kk.
                 P_out = solve_model(kk, l_guess, LB, UB, guess, regionParams, params, 
-                                        power, shifter, KFshifter, KRshifter, p_F_LR, mid)
+                                        power, shifter, KFshifter, KRshifter, p_F_LR, mid, Gammatrix, linecons)
                 
                 # Compute local outputs.
                 local_price  = Price_Solve(P_out, shifter, n, params)
@@ -298,8 +298,6 @@ function solve_power_output_exog(RWParams::StructRWParams, params::StructParams,
         jj=1
 
         #while diffend > tol
-        println("Number of iterations inner while loop: ", niters_in)
-
         # set long run goods prices 
         pg_LR_s = w_LR .^ (params.Vs[:, 1]' .* ones(params.J, 1)) .* 
             p_E_LR .^ ((params.Vs[:, 2]'.* ones(params.J, 1)) .+ (params.Vs[:, 3]'.* ones(params.J, 1))) .* 
