@@ -12,7 +12,7 @@ import ..TransitionBat: StructTransOutputBat
 export writedata_battery
 
 """
-    writedata_battery(P::StructAllParams, M::NamedTuple, S::NamedTuple, T::NamedTuple, config::ModelConfig, R::String)
+    writedata_battery(P::StructAllParams, M::StructmarketOutput, S::StructSteadyStateBat, T::StructTransOutputBat, config::ModelConfig, R::String)
 
 Writes data outputs to .csv files for analysis. All outputs are in the Results folder
 
@@ -31,9 +31,10 @@ Model results for capital and battery price falls, renewable shares, US GDP outc
 ## Notes
 This function writes data when RunBattery==1 or RunCurtailment==1.
 """
-function writedata_battery(P::StructAllParams, M::NamedTuple, S::NamedTuple, T::NamedTuple, config::ModelConfig, R::String)
-    SGE_TASK_ID = "0"
-    #SGE_TASK_ID = Base.parse(Int, ENV["SGE_TASK_ID"])
+function writedata_battery(P::StructAllParams, M::StructMarketOutput, S::StructSteadyStateBat, T::StructTransOutputBat, config::ModelConfig, R::String)
+    #SGE_TASK_ID = "1"
+    SGE_TASK_ID = Base.parse(Int, ENV["SGE_TASK_ID"])
+    
     curtailmentswitch = P.curtailmentswitch
     hoursofstorage = config.hoursofstorage
     

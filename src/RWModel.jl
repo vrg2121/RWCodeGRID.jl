@@ -12,15 +12,6 @@ import .ModelConfiguration: ModelConfig
 # load struct for model Params
 using DrawGammas #StructAllParams, StructParams
 
-wd = pwd()
-D = "$wd/Data"
-G = "$wd/Guesses"
-R = "$wd/Results"
-using JLD2
-P = jldopen("$D/Params/P_1.jld2", "r")["P"]; # 565138336 bytes = 565 MB
-import ..ModelConfiguration: ModelConfig
-config = ModelConfig(1, 1, 0, 0, 2, 100, 0, [2.0, 4.0, 6.0])
-
 # Load Data
 include("./functions/DataAdjustments.jl")
 include("./functions/DataLoadsFunc.jl")
@@ -48,15 +39,17 @@ import .Transition: solve_transition
 include("./WriteData.jl")
 import .WriteData: writedata
 
-# Write Data with Battery configurations
-include("./WriteDataBattery.jl")
-import .WriteDataBattery: writedata_battery
+# -------------------------- Run Battery Transition -------------------------- #
 
 include("./SteadyStateBat.jl")
 import .SteadyStateBat: solve_steadystate_bat, StructSteadyStateBat
 
 include("./TransitionBat.jl")
 import .TransitionBat: StructTransOutputBat, solve_transition_bat
+
+# Write Data with Battery configurations
+include("./WriteDataBattery.jl")
+import .WriteDataBattery: writedata_battery
 
 # -------------------- Run Exogenous Technology Equilibria ------------------- #
 
@@ -194,6 +187,31 @@ function run_model(config::ModelConfig, D::String, G::String, R::String, P::Stru
 
 
 end
+
+# ---------------------------------------------------------------------------- #
+#                         Testing on personal computer                         #
+# ---------------------------------------------------------------------------- #
+#using JLD2, DataFrames
+#import DrawGammas: StructAllParams, StructParams
+#wd = pwd()
+#D = "$wd/Data"
+#G = "$wd/Guesses"
+#R = "$wd/Results"
+
+# load the parameters for this task
+#SGE_TASK_ID = "1"
+#P = jldopen("$D/Params/P_$SGE_TASK_ID.jld2", "r")["P"];
+
+#println("Number of threads on task $SGE_TASK_ID = ", Threads.nthreads())
+#config = ModelConfig(1, 1, 0, 0, 2, 100, 0, [2.0, 4.0, 6.0])
+
+#run_model(config, D, G, R, P)
+
+# must change SGE_TASK_ID in WriteData and WriteDataBattery
+# 6/24/2025 - everything works perfectly on PC
+# ---------------------------------------------------------------------------- #
+#                                  Testing End                                 #
+# ---------------------------------------------------------------------------- #
 
 
 end # module RWModel

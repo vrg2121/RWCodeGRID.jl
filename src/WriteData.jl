@@ -34,6 +34,7 @@ This function writes data only when RunTransition==1.
 """
 
 function writedata(P::StructAllParams, DL::StructAllData, M::StructMarketOutput, S::StructSteadyState, T::StructTransOutput, Subsidy::Int, config::ModelConfig, R::String)
+    #SGE_TASK_ID = "1"
     SGE_TASK_ID = Base.parse(Int, ENV["SGE_TASK_ID"])
 
     # initialize data
@@ -86,10 +87,10 @@ function writedata(P::StructAllParams, DL::StructAllData, M::StructMarketOutput,
     writedlm("$R/Renewable_share/Renewable_share$(labeller)_$SGE_TASK_ID.csv", sharepath, ",")
 
     # subsidy value
-    """Sv .= 0.05 .* DL.RWParams.thetaS .* T.transeq.KR_path
-    Subval .= sum(Sv, dims=1)
-    Subsidyvalue = [yearindex_subsidy Subval[1:12]]
-    writedlm("$R/Subsidy_value/Subsidy_value$(labeller)_$SGE_TASK_ID.csv", Subsidyvalue, ",")"""   # this is just written over by the second method of calculating Subsidyvalue
+    #Sv .= 0.05 .* DL.RWParams.thetaS .* T.transeq.KR_path
+    #Subval .= sum(Sv, dims=1)
+    #Subsidyvalue = [yearindex_subsidy Subval[1:12]]
+    #writedlm("$R/Subsidy_value/Subsidy_value$(labeller)_$SGE_TASK_ID.csv", Subsidyvalue, ",")   # this is just written over by the second method of calculating Subsidyvalue
 
     Subsidyvalue = 100 .* T.renewshareUS[1:30]
     Subsidyvalue = [yearindex_subsidy Subsidyvalue[1:12] T.YUS_rel[:, 1:12]']

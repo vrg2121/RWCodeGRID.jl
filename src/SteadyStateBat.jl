@@ -28,7 +28,7 @@ mutable struct StructSteadyStateBat
     welfare_fossilchange::Matrix{Float64}
 end
 
-function solve_steadystate_bat(S, P::StructAllParams, D::StructAllData, M::StructMarketOutput, config::ModelConfig, G::String)
+function solve_steadystate_bat(S::StructSteadyState, P::StructAllParams, D::StructAllData, M::StructMarketOutput, config::ModelConfig, G::String)
     
     pB_shifter = P.pB_shifter
     if config.RunBatteries == 1
@@ -89,7 +89,7 @@ function solve_steadystate_bat(S, P::StructAllParams, D::StructAllData, M::Struc
 
     welfare_fossilchange .= -M.mrkteq.fossilsales ./ M.mrkteq.Expenditure_init #   8.800 μs (6 allocations: 39.78 KiB)
 
-    return StructSteadyState(
+    return StructSteadyStateBat(
     sseq,
     interp3,
     GDP,
